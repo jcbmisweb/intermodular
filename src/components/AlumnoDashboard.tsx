@@ -402,7 +402,7 @@ export default function AlumnoDashboard({
 
   // Local Gastronomic project state loaded from localStorage or initialized with defaults
   const [gastState, setGastState] = useState(() => {
-    const saved = localStorage.getItem('studio_gast_project_v1');
+    const saved = localStorage.getItem('studio_gast_project_v2');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -450,7 +450,7 @@ export default function AlumnoDashboard({
 
   // Keep state synced with local storage
   useEffect(() => {
-    localStorage.setItem('studio_gast_project_v1', JSON.stringify(gastState));
+    localStorage.setItem('studio_gast_project_v2', JSON.stringify(gastState));
   }, [gastState]);
 
   // Helper to get grade record for a student and task

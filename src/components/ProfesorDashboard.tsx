@@ -194,7 +194,7 @@ export default function ProfesorDashboard({
 
   // Load simulated gastronomy state from localStorage or fallback
   const [gastState, setGastState] = useState(() => {
-    const saved = localStorage.getItem('studio_gast_project_v1');
+    const saved = localStorage.getItem('studio_gast_project_v2');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -226,7 +226,7 @@ export default function ProfesorDashboard({
       }
     };
     setGastState(updatedState);
-    localStorage.setItem('studio_gast_project_v1', JSON.stringify(updatedState));
+    localStorage.setItem('studio_gast_project_v2', JSON.stringify(updatedState));
     setSaveSuccess(true);
     setTimeout(() => {
       setSaveSuccess(false);

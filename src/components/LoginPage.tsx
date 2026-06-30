@@ -1,6 +1,7 @@
 import React from 'react';
 import { LogIn } from 'lucide-react';
 import { motion } from 'motion/react';
+// @ts-ignore
 import loginIllustration from '../assets/images/login_illustration_1782836272108.jpg';
 
 interface LoginPageProps {
@@ -18,7 +19,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <div className="mb-6 overflow-hidden rounded-2xl">
           <img 
             src={loginIllustration} 
-            alt="EduCore" 
+            alt="Manager Pro intermodular" 
             className="w-full h-40 object-cover"
             referrerPolicy="no-referrer"
           />

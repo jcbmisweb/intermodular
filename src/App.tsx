@@ -40,60 +40,14 @@ import LoginPage from './components/LoginPage';
 const INITIAL_USERS: AppUser[] = [
   {
     id: 'u-admin',
-    name: 'Juan Carlos',
-    email: 'jcbprofesor@gmail.com',
+    name: 'Juan Codina',
+    email: 'juan.codina@murciaeduca.es',
     role: 'admin',
-    roles: ['admin', 'profesor'],
+    roles: ['admin', 'profesor', 'alumno'],
     avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
     initials: 'JC',
     color: 'bg-emerald-600 text-white',
-    joinedAt: '2026-06-01'
-  },
-  {
-    id: 'u-prof1',
-    name: 'Sofía Alcántara',
-    email: 'sofia@empresa.com',
-    role: 'profesor',
-    roles: ['profesor'],
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    initials: 'SA',
-    color: 'bg-indigo-600 text-white',
-    classroom: 'Aula de Desarrollo Web',
-    joinedAt: '2026-06-10'
-  },
-  {
-    id: 'u-alum1',
-    name: 'Laura Torres',
-    email: 'laura@empresa.com',
-    role: 'alumno',
-    roles: ['alumno'],
-    avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-    initials: 'LT',
-    color: 'bg-teal-600 text-white',
-    classroom: 'Aula de Desarrollo Web',
-    joinedAt: '2026-06-12'
-  },
-  {
-    id: 'u-alum2',
-    name: 'Lucas Gómez',
-    email: 'lucas@colegio.com',
-    role: 'alumno',
-    roles: ['alumno'],
-    avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Lucas',
-    initials: 'LG',
-    color: 'bg-amber-600 text-white',
-    joinedAt: '2026-06-29'
-  },
-  {
-    id: 'u-alum3',
-    name: 'Marta Ruiz',
-    email: 'marta@colegio.com',
-    role: 'alumno',
-    roles: ['alumno'],
-    avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Marta',
-    initials: 'MR',
-    color: 'bg-rose-600 text-white',
-    joinedAt: '2026-06-29'
+    joinedAt: '2026-06-30'
   }
 ];
 
@@ -162,10 +116,10 @@ export default function App() {
 
   // 1. Initial State Load
   useEffect(() => {
-    const savedProjects = localStorage.getItem('studio_projects_v1');
-    const savedTeam = localStorage.getItem('studio_team_v1');
-    const savedUsers = localStorage.getItem('studio_users_v1');
-    const savedCurrentUserId = localStorage.getItem('studio_current_user_id_v1');
+    const savedProjects = localStorage.getItem('studio_projects_v2');
+    const savedTeam = localStorage.getItem('studio_team_v2');
+    const savedUsers = localStorage.getItem('studio_users_v2');
+    const savedCurrentUserId = localStorage.getItem('studio_current_user_id_v2');
 
     let loadedProjects = INITIAL_PROJECTS;
     let loadedTeam = INITIAL_TEAM;
@@ -174,32 +128,14 @@ export default function App() {
 
     if (savedProjects && savedTeam) {
       loadedProjects = JSON.parse(savedProjects);
-      // Migration: Ensure projects have a classroom if they match initial data names
-      let needsMigration = false;
-      const migratedProjects = loadedProjects.map(p => {
-        if (!p.classroom) {
-          if (p.name.includes('E-commerce')) p.classroom = '2HCA';
-          else if (p.name.includes('Sistemas Internos')) p.classroom = '2HCA';
-          else if (p.name.includes('SEO')) p.classroom = '2HCB';
-          else if (p.name.includes('Multi-Cloud')) p.classroom = '2HCB';
-          if (p.classroom) needsMigration = true;
-        }
-        return p;
-      });
-
-      if (needsMigration) {
-        loadedProjects = migratedProjects;
-        localStorage.setItem('studio_projects_v1', JSON.stringify(migratedProjects));
-      }
-
       loadedTeam = JSON.parse(savedTeam);
       setProjects(loadedProjects);
       setTeam(loadedTeam);
     } else {
       setProjects(INITIAL_PROJECTS);
       setTeam(INITIAL_TEAM);
-      localStorage.setItem('studio_projects_v1', JSON.stringify(INITIAL_PROJECTS));
-      localStorage.setItem('studio_team_v1', JSON.stringify(INITIAL_TEAM));
+      localStorage.setItem('studio_projects_v2', JSON.stringify(INITIAL_PROJECTS));
+      localStorage.setItem('studio_team_v2', JSON.stringify(INITIAL_TEAM));
     }
 
     if (savedUsers) {
@@ -207,50 +143,50 @@ export default function App() {
       setUsers(loadedUsers);
     } else {
       setUsers(INITIAL_USERS);
-      localStorage.setItem('studio_users_v1', JSON.stringify(INITIAL_USERS));
+      localStorage.setItem('studio_users_v2', JSON.stringify(INITIAL_USERS));
     }
 
-    const savedClassrooms = localStorage.getItem('studio_classrooms_v1');
+    const savedClassrooms = localStorage.getItem('studio_classrooms_v2');
     const initialClassroomsList = ['2HCA', '2HCB', '2HCC'];
     if (savedClassrooms) {
       setClassrooms(JSON.parse(savedClassrooms));
     } else {
       setClassrooms(initialClassroomsList);
-      localStorage.setItem('studio_classrooms_v1', JSON.stringify(initialClassroomsList));
+      localStorage.setItem('studio_classrooms_v2', JSON.stringify(initialClassroomsList));
     }
 
-    const savedIesName = localStorage.getItem('studio_ies_name_v1');
+    const savedIesName = localStorage.getItem('studio_ies_name_v2');
     if (savedIesName) {
       setIesName(savedIesName);
     } else {
-      localStorage.setItem('studio_ies_name_v1', 'IES Sostenible');
+      localStorage.setItem('studio_ies_name_v2', 'IES Sostenible');
     }
 
-    const savedIesLogo = localStorage.getItem('studio_ies_logo_v1');
+    const savedIesLogo = localStorage.getItem('studio_ies_logo_v2');
     if (savedIesLogo) {
       setIesLogo(savedIesLogo);
     }
 
-    const savedImpact = localStorage.getItem('studio_coeval_impact_v1');
+    const savedImpact = localStorage.getItem('studio_coeval_impact_v2');
     if (savedImpact) {
       setMaxCoevaluationImpact(Number(savedImpact));
     }
 
-    const savedMaxTeam = localStorage.getItem('studio_max_team_score_v1');
+    const savedMaxTeam = localStorage.getItem('studio_max_team_score_v2');
     if (savedMaxTeam) {
       setMaxTeamScore(Number(savedMaxTeam));
     }
-    const savedMaxExpo = localStorage.getItem('studio_max_expo_score_v1');
+    const savedMaxExpo = localStorage.getItem('studio_max_expo_score_v2');
     if (savedMaxExpo) {
       setMaxExpositionScore(Number(savedMaxExpo));
     }
-    const savedMaxCoeval = localStorage.getItem('studio_max_coeval_adjust_v1');
+    const savedMaxCoeval = localStorage.getItem('studio_max_coeval_adjust_v2');
     if (savedMaxCoeval) {
       setMaxCoevalAdjustment(Number(savedMaxCoeval));
     }
 
     // Enforce matching assessment tasks with AlumnoDashboard and load weights
-    const savedTasks = localStorage.getItem('studio_assessment_tasks_v1');
+    const savedTasks = localStorage.getItem('studio_assessment_tasks_v2');
     const defaultTasks: AssessmentTask[] = [
       { id: 'step-11', title: '1. Entregable Tarea 1', criterionIds: ['1a', '1b', '1c'], weight: 0.0 },
       { id: 'step-12', title: '2. Entregable Tarea 2', criterionIds: ['1d', '1e', '2a'], weight: 2.0 },
@@ -277,14 +213,14 @@ export default function App() {
       }
     }
     setAssessmentTasks(loadedTasks);
-    localStorage.setItem('studio_assessment_tasks_v1', JSON.stringify(loadedTasks));
+    localStorage.setItem('studio_assessment_tasks_v2', JSON.stringify(loadedTasks));
 
-    const savedGrades = localStorage.getItem('studio_student_grades_v1');
+    const savedGrades = localStorage.getItem('studio_student_grades_v2');
     if (savedGrades) {
       setStudentGrades(JSON.parse(savedGrades));
     }
 
-    const savedIndividualOral = localStorage.getItem('studio_individual_oral_grades_v1');
+    const savedIndividualOral = localStorage.getItem('studio_individual_oral_grades_v2');
     if (savedIndividualOral) {
       const loaded = JSON.parse(savedIndividualOral);
       const migrated = loaded.map((g: any) => ({
@@ -298,53 +234,29 @@ export default function App() {
       }));
       setIndividualOralGrades(migrated);
     } else {
-      const initialOral: IndividualOralGrade[] = [
-        {
-          studentId: 'u-alum1',
-          teamGrade: 9.0,         // 9.0 out of 10
-          expositionGrade: 8.5,   // 8.5 out of 10
-          coevalItem1: 'positive',
-          coevalItem2: 'positive',
-          justification: 'Excelente participación durante la defensa del proyecto, resolviendo con soltura todas las preguntas técnicas planteadas.',
-          presented: true
-        }
-      ];
+      const initialOral: IndividualOralGrade[] = [];
       setIndividualOralGrades(initialOral);
-      localStorage.setItem('studio_individual_oral_grades_v1', JSON.stringify(initialOral));
+      localStorage.setItem('studio_individual_oral_grades_v2', JSON.stringify(initialOral));
     }
 
     if (savedCurrentUserId) {
       loadedCurrentUserId = savedCurrentUserId;
     } else {
-      localStorage.setItem('studio_current_user_id_v1', 'u-admin');
+      localStorage.setItem('studio_current_user_id_v2', 'u-admin');
     }
 
-    const savedAnnouncements = localStorage.getItem('studio_announcements_v1');
+    const savedAnnouncements = localStorage.getItem('studio_announcements_v2');
     if (savedAnnouncements) {
       setAnnouncements(JSON.parse(savedAnnouncements));
     } else {
-      const defaultAnnouncements: Announcement[] = [
-        {
-          id: 'ann-1',
-          text: 'Bienvenidos al nuevo trimestre. Por favor completen el diseño de wireframes para el proyecto de E-commerce.',
-          date: '2026-06-28',
-          author: 'Sofía Alcántara',
-          readByStudentIds: []
-        },
-        {
-          id: 'ann-2',
-          text: 'Recuerden que la entrega de arquitectura de API es este viernes.',
-          date: '2026-06-25',
-          author: 'Sofía Alcántara',
-          readByStudentIds: []
-        }
-      ];
+      const defaultAnnouncements: Announcement[] = [];
       setAnnouncements(defaultAnnouncements);
-      localStorage.setItem('studio_announcements_v1', JSON.stringify(defaultAnnouncements));
+      localStorage.setItem('studio_announcements_v2', JSON.stringify(defaultAnnouncements));
     }
 
     const currentFound = loadedUsers.find(u => u.id === loadedCurrentUserId) || loadedUsers[0];
     setCurrentUser(currentFound);
+    setActiveRole(currentFound ? currentFound.role : 'admin');
   }, []);
 
   // Real-time ticking clock
@@ -353,10 +265,81 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Synchronize Google authenticated firebaseUser with application users list
+  useEffect(() => {
+    if (firebaseUser && users.length > 0) {
+      const emailLower = (firebaseUser.email || '').toLowerCase();
+      
+      // Find matching user in our local DB
+      const matchedUser = users.find(u => (u.email || '').toLowerCase() === emailLower);
+      
+      if (matchedUser) {
+        // Sync currentUser if it's different
+        if (!currentUser || currentUser.id !== matchedUser.id) {
+          setCurrentUser(matchedUser);
+          setActiveRole(matchedUser.role);
+          localStorage.setItem('studio_current_user_id_v2', matchedUser.id);
+        }
+      } else {
+        // Create new user dynamically
+        const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
+        
+        // If there is an existing u-admin with placeholder details, we can replace or update it
+        let updatedUsersList = [...users];
+        let newUser: AppUser;
+        
+        const initials = firebaseUser.displayName 
+          ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
+          : emailLower.slice(0, 2).toUpperCase();
+          
+        if (isSuperAdmin) {
+          // Update the pre-existing u-admin
+          const adminIdx = users.findIndex(u => u.id === 'u-admin');
+          newUser = {
+            id: 'u-admin',
+            name: firebaseUser.displayName || 'Juan Codina',
+            email: firebaseUser.email || 'juan.codina@murciaeduca.es',
+            role: 'admin',
+            roles: ['admin', 'profesor', 'alumno'],
+            avatarUrl: firebaseUser.photoURL || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
+            initials: initials || 'JC',
+            color: 'bg-emerald-600 text-white',
+            joinedAt: new Date().toISOString().split('T')[0]
+          };
+          if (adminIdx >= 0) {
+            updatedUsersList[adminIdx] = newUser;
+          } else {
+            updatedUsersList.push(newUser);
+          }
+        } else {
+          // Regular new student/teacher logged in with Google
+          newUser = {
+            id: `u-${Date.now()}`,
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Alumno',
+            email: firebaseUser.email || '',
+            role: 'alumno',
+            roles: ['alumno'],
+            avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
+            initials: initials,
+            color: 'bg-indigo-600 text-white',
+            joinedAt: new Date().toISOString().split('T')[0]
+          };
+          updatedUsersList.push(newUser);
+        }
+        
+        setUsers(updatedUsersList);
+        localStorage.setItem('studio_users_v2', JSON.stringify(updatedUsersList));
+        setCurrentUser(newUser);
+        setActiveRole(newUser.role);
+        localStorage.setItem('studio_current_user_id_v2', newUser.id);
+      }
+    }
+  }, [firebaseUser, users, currentUser]);
+
   // 2. Persist state updates to LocalStorage
   const saveProjects = (updated: Project[]) => {
     setProjects(updated);
-    localStorage.setItem('studio_projects_v1', JSON.stringify(updated));
+    localStorage.setItem('studio_projects_v2', JSON.stringify(updated));
     // If we're inspecting a project, keep it fresh in the detail drawer
     if (projectToInspect) {
       const refreshed = updated.find(p => p.id === projectToInspect.id);
@@ -368,12 +351,12 @@ export default function App() {
 
   const saveTeam = (updated: TeamMember[]) => {
     setTeam(updated);
-    localStorage.setItem('studio_team_v1', JSON.stringify(updated));
+    localStorage.setItem('studio_team_v2', JSON.stringify(updated));
   };
 
   const saveUsers = (updated: AppUser[]) => {
     setUsers(updated);
-    localStorage.setItem('studio_users_v1', JSON.stringify(updated));
+    localStorage.setItem('studio_users_v2', JSON.stringify(updated));
     if (currentUser) {
       const refreshed = updated.find(u => u.id === currentUser.id);
       if (refreshed) {
@@ -387,7 +370,7 @@ export default function App() {
     if (targetUser) {
       setCurrentUser(targetUser);
       setActiveRole(targetUser.roles[0]);
-      localStorage.setItem('studio_current_user_id_v1', userId);
+      localStorage.setItem('studio_current_user_id_v2', userId);
     }
   };
 
@@ -423,13 +406,13 @@ export default function App() {
   const handleCreateClassroom = (name: string) => {
     const updated = [...classrooms, name];
     setClassrooms(updated);
-    localStorage.setItem('studio_classrooms_v1', JSON.stringify(updated));
+    localStorage.setItem('studio_classrooms_v2', JSON.stringify(updated));
   };
 
   const handleDeleteClassroom = (name: string) => {
     const updatedClassrooms = classrooms.filter(c => c !== name);
     setClassrooms(updatedClassrooms);
-    localStorage.setItem('studio_classrooms_v1', JSON.stringify(updatedClassrooms));
+    localStorage.setItem('studio_classrooms_v2', JSON.stringify(updatedClassrooms));
 
     // Clear classroom from users
     const updatedUsers = users.map(u => u.classroom === name ? { ...u, classroom: undefined } : u);
@@ -450,7 +433,7 @@ export default function App() {
       } else {
         updated = [...prev, { studentId, taskId, score, isDelivered: true }];
       }
-      localStorage.setItem('studio_student_grades_v1', JSON.stringify(updated));
+      localStorage.setItem('studio_student_grades_v2', JSON.stringify(updated));
       return updated;
     });
   };
@@ -465,7 +448,7 @@ export default function App() {
       } else {
         updated = [...prev, { studentId, taskId, score: 0, isDelivered }];
       }
-      localStorage.setItem('studio_student_grades_v1', JSON.stringify(updated));
+      localStorage.setItem('studio_student_grades_v2', JSON.stringify(updated));
       return updated;
     });
   };
@@ -489,7 +472,7 @@ export default function App() {
           ...updated
         } as IndividualOralGrade];
       }
-      localStorage.setItem('studio_individual_oral_grades_v1', JSON.stringify(newGrades));
+      localStorage.setItem('studio_individual_oral_grades_v2', JSON.stringify(newGrades));
       return newGrades;
     });
   };
@@ -498,9 +481,9 @@ export default function App() {
     setMaxTeamScore(maxTeam);
     setMaxExpositionScore(maxExposition);
     setMaxCoevalAdjustment(maxCoeval);
-    localStorage.setItem('studio_max_team_score_v1', maxTeam.toString());
-    localStorage.setItem('studio_max_expo_score_v1', maxExposition.toString());
-    localStorage.setItem('studio_max_coeval_adjust_v1', maxCoeval.toString());
+    localStorage.setItem('studio_max_team_score_v2', maxTeam.toString());
+    localStorage.setItem('studio_max_expo_score_v2', maxExposition.toString());
+    localStorage.setItem('studio_max_coeval_adjust_v2', maxCoeval.toString());
   };
 
   const handleUpdateTaskWeights = (weights: { [taskId: string]: number }) => {
@@ -509,7 +492,7 @@ export default function App() {
         ...task,
         weight: weights[task.id] !== undefined ? weights[task.id] : (task.weight ?? 0.0)
       }));
-      localStorage.setItem('studio_assessment_tasks_v1', JSON.stringify(updated));
+      localStorage.setItem('studio_assessment_tasks_v2', JSON.stringify(updated));
       return updated;
     });
   };
@@ -522,7 +505,7 @@ export default function App() {
     };
     const updated = [...assessmentTasks, newTask];
     setAssessmentTasks(updated);
-    localStorage.setItem('studio_assessment_tasks_v1', JSON.stringify(updated));
+    localStorage.setItem('studio_assessment_tasks_v2', JSON.stringify(updated));
   };
 
   const handlePublishAnnouncement = (text: string, authorName: string) => {
@@ -535,7 +518,7 @@ export default function App() {
     };
     setAnnouncements(prev => {
       const updated = [newAnn, ...prev];
-      localStorage.setItem('studio_announcements_v1', JSON.stringify(updated));
+      localStorage.setItem('studio_announcements_v2', JSON.stringify(updated));
       return updated;
     });
   };
@@ -555,7 +538,7 @@ export default function App() {
         }
         return ann;
       });
-      localStorage.setItem('studio_announcements_v1', JSON.stringify(updated));
+      localStorage.setItem('studio_announcements_v2', JSON.stringify(updated));
       return updated;
     });
   };
@@ -563,13 +546,13 @@ export default function App() {
   const handleUpdateIesSettings = (name: string, logo: string) => {
     setIesName(name);
     setIesLogo(logo);
-    localStorage.setItem('studio_ies_name_v1', name);
-    localStorage.setItem('studio_ies_logo_v1', logo);
+    localStorage.setItem('studio_ies_name_v2', name);
+    localStorage.setItem('studio_ies_logo_v2', logo);
   };
 
   const handleUpdateCoevaluationImpact = (impact: number) => {
     setMaxCoevaluationImpact(impact);
-    localStorage.setItem('studio_coeval_impact_v1', impact.toString());
+    localStorage.setItem('studio_coeval_impact_v2', impact.toString());
   };
 
   // 3. Project Handlers
@@ -677,12 +660,18 @@ export default function App() {
     setClassrooms(['2HCA', '2HCB', '2HCC']);
     setIesName('IES Sostenible');
     setIesLogo('');
-    localStorage.setItem('studio_projects_v1', JSON.stringify(INITIAL_PROJECTS));
-    localStorage.setItem('studio_team_v1', JSON.stringify(INITIAL_TEAM));
-    localStorage.setItem('studio_users_v1', JSON.stringify(INITIAL_USERS));
-    localStorage.setItem('studio_classrooms_v1', JSON.stringify(['2HCA', '2HCB', '2HCC']));
-    localStorage.setItem('studio_ies_name_v1', 'IES Sostenible');
-    localStorage.setItem('studio_ies_logo_v1', '');
+    setStudentGrades([]);
+    setIndividualOralGrades([]);
+    setAnnouncements([]);
+    localStorage.setItem('studio_projects_v2', JSON.stringify(INITIAL_PROJECTS));
+    localStorage.setItem('studio_team_v2', JSON.stringify(INITIAL_TEAM));
+    localStorage.setItem('studio_users_v2', JSON.stringify(INITIAL_USERS));
+    localStorage.setItem('studio_classrooms_v2', JSON.stringify(['2HCA', '2HCB', '2HCC']));
+    localStorage.setItem('studio_ies_name_v2', 'IES Sostenible');
+    localStorage.setItem('studio_ies_logo_v2', '');
+    localStorage.setItem('studio_student_grades_v2', JSON.stringify([]));
+    localStorage.setItem('studio_individual_oral_grades_v2', JSON.stringify([]));
+    localStorage.setItem('studio_announcements_v2', JSON.stringify([]));
     setProjectToInspect(null);
     setProjectToEdit(null);
   };
@@ -1074,6 +1063,10 @@ export default function App() {
     );
   };
 
+  const googleLinkedUser = firebaseUser 
+    ? users.find(u => u.email?.toLowerCase() === firebaseUser.email?.toLowerCase()) 
+    : null;
+
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
       {!firebaseUser ? (
@@ -1090,43 +1083,60 @@ export default function App() {
               </span>
             </div>
             
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-400 font-medium text-[11px]">Usuario Activo:</span>
-              {(currentUser?.roles || []).includes('admin') ? (
-                <select 
-                  value={currentUser?.id || ''} 
-                  onChange={(e) => handleSwitchSession(e.target.value)}
-                  className="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-600 font-sans"
-                >
-                  {users.map(u => (
-                    <option key={u.id} value={u.id} className="bg-zinc-900 text-white font-medium">
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold font-sans flex items-center gap-2">
-                  {currentUser?.name} ({activeRole === 'admin' ? '🔑 Administrador' : activeRole === 'profesor' ? '🎓 Profesor' : activeRole === 'alumno' ? '✏️ Alumno' : '⏳ Sin Asignar'})
-                  {currentUser && (currentUser.roles || []).length > 1 && (
-                    <select
-                      value={activeRole || ''}
-                      onChange={(e) => {
-                        const newRole = e.target.value as UserRole;
-                        setActiveRole(newRole);
-                        if (currentUser) {
-                          setCurrentUser({ ...currentUser, role: newRole });
-                        }
-                      }}
-                      className="bg-zinc-900 text-white text-[10px] rounded p-0.5 ml-2 cursor-pointer"
-                    >
-                      {currentUser.roles.map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  )}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* If the logged-in Google user is an admin, always show the user simulation dropdown so they can switch between different users */}
+              {googleLinkedUser?.roles.includes('admin') && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-400 font-medium text-[11px]">Simular Usuario:</span>
+                  <select 
+                    value={currentUser?.id || ''} 
+                    onChange={(e) => handleSwitchSession(e.target.value)}
+                    className="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2.5 py-1 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-zinc-600 font-sans"
+                  >
+                    {users.map(u => (
+                      <option key={u.id} value={u.id} className="bg-zinc-900 text-white font-medium">
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
-              <button onClick={handleLogout} className="text-zinc-400 hover:text-white">Cerrar sesión</button>
+
+              {/* Show the roles of the currently active user as beautiful, clickable buttons (pills) */}
+              {currentUser && (currentUser.roles || []).length > 0 && (
+                <div className="flex items-center gap-1.5 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700/80">
+                  <span className="text-zinc-400 text-[10px] font-bold uppercase tracking-wider px-2">Perfiles:</span>
+                  {currentUser.roles.map((r) => {
+                    const isActive = activeRole === r;
+                    const label = r === 'admin' ? 'Administrador' : r === 'profesor' ? 'Profesor' : r === 'alumno' ? 'Alumno' : r;
+                    const activeBg = r === 'admin' 
+                      ? 'bg-emerald-600 text-white shadow-sm' 
+                      : r === 'profesor' 
+                        ? 'bg-indigo-600 text-white shadow-sm' 
+                        : 'bg-teal-600 text-white shadow-sm';
+                    return (
+                      <button
+                        key={r}
+                        onClick={() => handleChangeRole(r)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          isActive 
+                            ? `${activeBg} font-extrabold` 
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <button 
+                onClick={handleLogout} 
+                className="text-zinc-400 hover:text-white transition-colors text-xs font-bold border-l border-zinc-700 pl-3 ml-1"
+              >
+                Cerrar sesión
+              </button>
             </div>
           </div>
 

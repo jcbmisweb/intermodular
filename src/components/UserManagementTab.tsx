@@ -85,6 +85,7 @@ export default function UserManagementTab({
       name: newName,
       email: newEmail,
       role: newRole,
+      roles: [newRole],
       avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(newName)}`,
       initials,
       color: randomColor,
