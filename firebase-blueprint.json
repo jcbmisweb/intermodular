@@ -2,19 +2,73 @@
   "entities": {
     "users": {
       "fields": {
-        "email": "string",
+        "id": "string",
         "name": "string",
-        "photoURL": "string"
+        "email": "string",
+        "role": "string",
+        "roles": "array",
+        "avatarUrl": "string",
+        "initials": "string",
+        "color": "string",
+        "classroom": "string",
+        "joinedAt": "string"
       }
     },
     "projects": {
       "fields": {
+        "id": "string",
         "name": "string",
-        "ownerId": "string"
+        "description": "string",
+        "status": "string",
+        "priority": "string",
+        "category": "string",
+        "budget": "number",
+        "spent": "number",
+        "startDate": "string",
+        "dueDate": "string",
+        "progress": "number",
+        "team": "array",
+        "tasks": "array",
+        "lastUpdated": "string",
+        "classroom": "string",
+        "gastronomicState": "object"
+      }
+    },
+    "classrooms": {
+      "fields": {
+        "name": "string"
+      }
+    },
+    "studentGrades": {
+      "fields": {
+        "studentId": "string",
+        "taskId": "string",
+        "score": "number",
+        "isDelivered": "boolean"
+      }
+    },
+    "individualOralGrades": {
+      "fields": {
+        "studentId": "string",
+        "teamGrade": "number",
+        "expositionGrade": "number",
+        "coevalItem1": "string",
+        "coevalItem2": "string",
+        "justification": "string",
+        "presented": "boolean"
+      }
+    },
+    "announcements": {
+      "fields": {
+        "id": "string",
+        "text": "string",
+        "date": "string",
+        "author": "string",
+        "readByStudentIds": "array"
       }
     }
   },
   "firestore": {
-    "rules": "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /users/{userId} {\n      allow read, write: if request.auth != null && request.auth.uid == userId;\n    }\n    match /projects/{projectId} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}"
+    "rules": "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /users/{userId} {\n      allow read, write: if request.auth != null;\n    }\n    match /projects/{projectId} {\n      allow read, write: if request.auth != null;\n    }\n    match /classrooms/{classroomId} {\n      allow read, write: if request.auth != null;\n    }\n    match /studentGrades/{gradeId} {\n      allow read, write: if request.auth != null;\n    }\n    match /individualOralGrades/{studentId} {\n      allow read, write: if request.auth != null;\n    }\n    match /announcements/{annId} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}"
   }
 }

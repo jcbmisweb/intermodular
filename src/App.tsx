@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
-import { auth, googleProvider } from './lib/firebase';
+import { 
+  collection, 
+  doc, 
+  onSnapshot, 
+  setDoc, 
+  deleteDoc, 
+  getDoc,
+  getDocs
+} from 'firebase/firestore';
+import { auth, googleProvider, db } from './lib/firebase';
 import { 
   Briefcase, 
   TrendingUp, 
@@ -14,6 +23,7 @@ import {
   User as UserIcon,
   ExternalLink,
   Plus,
+  PenTool,
   Shield,
   GraduationCap,
   UserCheck,
@@ -75,7 +85,10 @@ export default function App() {
 
   // Core Data State (synchronized with localStorage)
   const [projects, setProjects] = useState<Project[]>([]);
-  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>(() => {
+    const saved = localStorage.getItem('studio_team_v2');
+    return saved ? JSON.parse(saved) : INITIAL_TEAM;
+  });
   const [classrooms, setClassrooms] = useState<string[]>([]);
   const [iesName, setIesName] = useState<string>('IES Sostenible');
   const [iesLogo, setIesLogo] = useState<string>('');
@@ -105,6 +118,7 @@ export default function App() {
 
   // Modal / Drawer States
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isEditingAdminProfile, setIsEditingAdminProfile] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [projectToInspect, setProjectToInspect] = useState<Project | null>(null);
   
@@ -114,149 +128,104 @@ export default function App() {
   // Time state for header
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // 1. Initial State Load
+  // 1. Real-time Firestore Synchronization & Seed Loader
   useEffect(() => {
-    const savedProjects = localStorage.getItem('studio_projects_v2');
-    const savedTeam = localStorage.getItem('studio_team_v2');
-    const savedUsers = localStorage.getItem('studio_users_v2');
-    const savedCurrentUserId = localStorage.getItem('studio_current_user_id_v2');
-
-    let loadedProjects = INITIAL_PROJECTS;
-    let loadedTeam = INITIAL_TEAM;
-    let loadedUsers = INITIAL_USERS;
-    let loadedCurrentUserId = 'u-admin';
-
-    if (savedProjects && savedTeam) {
-      loadedProjects = JSON.parse(savedProjects);
-      loadedTeam = JSON.parse(savedTeam);
-      setProjects(loadedProjects);
-      setTeam(loadedTeam);
-    } else {
-      setProjects(INITIAL_PROJECTS);
-      setTeam(INITIAL_TEAM);
-      localStorage.setItem('studio_projects_v2', JSON.stringify(INITIAL_PROJECTS));
-      localStorage.setItem('studio_team_v2', JSON.stringify(INITIAL_TEAM));
-    }
-
-    if (savedUsers) {
-      loadedUsers = JSON.parse(savedUsers);
-      setUsers(loadedUsers);
-    } else {
-      setUsers(INITIAL_USERS);
-      localStorage.setItem('studio_users_v2', JSON.stringify(INITIAL_USERS));
-    }
-
-    const savedClassrooms = localStorage.getItem('studio_classrooms_v2');
-    const initialClassroomsList = ['2HCA', '2HCB', '2HCC'];
-    if (savedClassrooms) {
-      setClassrooms(JSON.parse(savedClassrooms));
-    } else {
-      setClassrooms(initialClassroomsList);
-      localStorage.setItem('studio_classrooms_v2', JSON.stringify(initialClassroomsList));
-    }
-
-    const savedIesName = localStorage.getItem('studio_ies_name_v2');
-    if (savedIesName) {
-      setIesName(savedIesName);
-    } else {
-      localStorage.setItem('studio_ies_name_v2', 'IES Sostenible');
-    }
-
-    const savedIesLogo = localStorage.getItem('studio_ies_logo_v2');
-    if (savedIesLogo) {
-      setIesLogo(savedIesLogo);
-    }
-
-    const savedImpact = localStorage.getItem('studio_coeval_impact_v2');
-    if (savedImpact) {
-      setMaxCoevaluationImpact(Number(savedImpact));
-    }
-
-    const savedMaxTeam = localStorage.getItem('studio_max_team_score_v2');
-    if (savedMaxTeam) {
-      setMaxTeamScore(Number(savedMaxTeam));
-    }
-    const savedMaxExpo = localStorage.getItem('studio_max_expo_score_v2');
-    if (savedMaxExpo) {
-      setMaxExpositionScore(Number(savedMaxExpo));
-    }
-    const savedMaxCoeval = localStorage.getItem('studio_max_coeval_adjust_v2');
-    if (savedMaxCoeval) {
-      setMaxCoevalAdjustment(Number(savedMaxCoeval));
-    }
-
-    // Enforce matching assessment tasks with AlumnoDashboard and load weights
-    const savedTasks = localStorage.getItem('studio_assessment_tasks_v2');
-    const defaultTasks: AssessmentTask[] = [
-      { id: 'step-11', title: '1. Entregable Tarea 1', criterionIds: ['1a', '1b', '1c'], weight: 0.0 },
-      { id: 'step-12', title: '2. Entregable Tarea 2', criterionIds: ['1d', '1e', '2a'], weight: 2.0 },
-      { id: 'step-13', title: '3. Entregable Tarea 3', criterionIds: ['2b', '2c', '2d'], weight: 3.0 },
-      { id: 'step-14', title: '4. Entregable Tarea 4', criterionIds: ['2e', '2f', '2g'], weight: 1.0 },
-      { id: 'step-15', title: '5. Entregable Tarea 5', criterionIds: ['3a', '3b', '3c'], weight: 2.0 },
-      { id: 'step-16', title: '6. Informe Coevaluación', criterionIds: ['3d', '3e', '3f'], weight: 0.0 },
-      { id: 'step-17', title: '7. Memoria Final del Proyecto', criterionIds: ['4a', '4b', '4c'], weight: 2.0 },
-    ];
-
-    let loadedTasks = defaultTasks;
-    if (savedTasks) {
-      try {
-        const parsed = JSON.parse(savedTasks) as AssessmentTask[];
-        loadedTasks = parsed.map(pt => {
-          const matchingDefault = defaultTasks.find(dt => dt.id === pt.id);
-          return {
-            ...pt,
-            weight: pt.weight !== undefined ? pt.weight : (matchingDefault ? matchingDefault.weight : 0.0)
-          };
+    // A. Sync Classrooms
+    const unsubClassrooms = onSnapshot(collection(db, 'classrooms'), (snapshot) => {
+      if (snapshot.empty) {
+        const initialClassroomsList = ['2HCA', '2HCB', '2HCC'];
+        initialClassroomsList.forEach(async (c) => {
+          await setDoc(doc(db, 'classrooms', c), { name: c });
         });
-      } catch (err) {
-        loadedTasks = defaultTasks;
+        setClassrooms(initialClassroomsList);
+      } else {
+        const list: string[] = [];
+        snapshot.forEach(doc => list.push(doc.id));
+        setClassrooms(list);
       }
-    }
-    setAssessmentTasks(loadedTasks);
-    localStorage.setItem('studio_assessment_tasks_v2', JSON.stringify(loadedTasks));
+    });
 
-    const savedGrades = localStorage.getItem('studio_student_grades_v2');
-    if (savedGrades) {
-      setStudentGrades(JSON.parse(savedGrades));
-    }
+    // B. Sync Users
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      if (snapshot.empty) {
+        INITIAL_USERS.forEach(async (u) => {
+          await setDoc(doc(db, 'users', u.id), u);
+        });
+        setUsers(INITIAL_USERS);
+      } else {
+        const list: AppUser[] = [];
+        snapshot.forEach(d => list.push(d.data() as AppUser));
+        setUsers(list);
+      }
+    });
 
-    const savedIndividualOral = localStorage.getItem('studio_individual_oral_grades_v2');
-    if (savedIndividualOral) {
-      const loaded = JSON.parse(savedIndividualOral);
-      const migrated = loaded.map((g: any) => ({
-        studentId: g.studentId,
-        teamGrade: g.teamGrade !== undefined ? g.teamGrade : (g.teamScore !== undefined ? (g.teamScore / 6.0) * 10 : 9.0),
-        expositionGrade: g.expositionGrade !== undefined ? g.expositionGrade : (g.expositionScore !== undefined ? (g.expositionScore / 3.0) * 10 : 8.5),
-        coevalItem1: g.coevalItem1 || 'neutral',
-        coevalItem2: g.coevalItem2 || 'neutral',
-        justification: g.justification || '',
-        presented: g.presented !== undefined ? g.presented : true
-      }));
-      setIndividualOralGrades(migrated);
-    } else {
-      const initialOral: IndividualOralGrade[] = [];
-      setIndividualOralGrades(initialOral);
-      localStorage.setItem('studio_individual_oral_grades_v2', JSON.stringify(initialOral));
-    }
+    // C. Sync Projects
+    const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
+      if (snapshot.empty) {
+        INITIAL_PROJECTS.forEach(async (p) => {
+          await setDoc(doc(db, 'projects', p.id), p);
+        });
+        setProjects(INITIAL_PROJECTS);
+      } else {
+        const list: Project[] = [];
+        snapshot.forEach(d => list.push(d.data() as Project));
+        setProjects(list);
+      }
+    });
 
-    if (savedCurrentUserId) {
-      loadedCurrentUserId = savedCurrentUserId;
-    } else {
-      localStorage.setItem('studio_current_user_id_v2', 'u-admin');
-    }
+    // D. Sync Student Grades
+    const unsubGrades = onSnapshot(collection(db, 'studentGrades'), (snapshot) => {
+      const list: StudentGrade[] = [];
+      snapshot.forEach(d => list.push(d.data() as StudentGrade));
+      setStudentGrades(list);
+    });
 
-    const savedAnnouncements = localStorage.getItem('studio_announcements_v2');
-    if (savedAnnouncements) {
-      setAnnouncements(JSON.parse(savedAnnouncements));
-    } else {
-      const defaultAnnouncements: Announcement[] = [];
-      setAnnouncements(defaultAnnouncements);
-      localStorage.setItem('studio_announcements_v2', JSON.stringify(defaultAnnouncements));
-    }
+    // E. Sync Individual Oral Grades
+    const unsubOral = onSnapshot(collection(db, 'individualOralGrades'), (snapshot) => {
+      const list: IndividualOralGrade[] = [];
+      snapshot.forEach(d => list.push(d.data() as IndividualOralGrade));
+      setIndividualOralGrades(list);
+    });
 
-    const currentFound = loadedUsers.find(u => u.id === loadedCurrentUserId) || loadedUsers[0];
-    setCurrentUser(currentFound);
-    setActiveRole(currentFound ? currentFound.role : 'admin');
+    // F. Sync Announcements
+    const unsubAnnouncements = onSnapshot(collection(db, 'announcements'), (snapshot) => {
+      const list: Announcement[] = [];
+      snapshot.forEach(d => list.push(d.data() as Announcement));
+      setAnnouncements(list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+
+    // G. Sync Platform Configuration (IES name, logo, maximums, weights)
+    const unsubConfig = onSnapshot(doc(db, 'config', 'ies'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.iesName) setIesName(data.iesName);
+        if (data.iesLogo) setIesLogo(data.iesLogo);
+        if (data.maxCoevaluationImpact !== undefined) setMaxCoevaluationImpact(data.maxCoevaluationImpact);
+        if (data.maxTeamScore !== undefined) setMaxTeamScore(data.maxTeamScore);
+        if (data.maxExpositionScore !== undefined) setMaxExpositionScore(data.maxExpositionScore);
+        if (data.maxCoevalAdjustment !== undefined) setMaxCoevalAdjustment(data.maxCoevalAdjustment);
+      } else {
+        // Seed default config
+        setDoc(doc(db, 'config', 'ies'), {
+          iesName: 'IES Sostenible',
+          iesLogo: '',
+          maxCoevaluationImpact: 1.0,
+          maxTeamScore: 6.0,
+          maxExpositionScore: 3.0,
+          maxCoevalAdjustment: 1.0
+        });
+      }
+    });
+
+    return () => {
+      unsubClassrooms();
+      unsubUsers();
+      unsubProjects();
+      unsubGrades();
+      unsubOral();
+      unsubAnnouncements();
+      unsubConfig();
+    };
   }, []);
 
   // Real-time ticking clock
@@ -265,87 +234,80 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Synchronize Google authenticated firebaseUser with application users list
+  // Synchronize Google authenticated firebaseUser with live application users
   useEffect(() => {
-    if (firebaseUser && users.length > 0) {
-      const emailLower = (firebaseUser.email || '').toLowerCase();
-      
-      // Find matching user in our local DB
-      const matchedUser = users.find(u => (u.email || '').toLowerCase() === emailLower);
-      
-      if (matchedUser) {
-        // Sync currentUser if it's different
-        if (!currentUser || currentUser.id !== matchedUser.id) {
-          setCurrentUser(matchedUser);
-          setActiveRole(matchedUser.role);
-          localStorage.setItem('studio_current_user_id_v2', matchedUser.id);
+    const syncUser = async () => {
+      if (!firebaseUser) {
+        // Offline / Simulation Fallback
+        const savedSessionId = localStorage.getItem('studio_current_user_id_v2') || 'u-admin';
+        const sessionUser = users.find(u => u.id === savedSessionId);
+        if (sessionUser) {
+          setCurrentUser(sessionUser);
+          setActiveRole(sessionUser.role);
+        } else if (users.length > 0) {
+          setCurrentUser(users[0]);
+          setActiveRole(users[0].role);
         }
-      } else {
-        // Create new user dynamically
-        const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
-        
-        // If there is an existing u-admin with placeholder details, we can replace or update it
-        let updatedUsersList = [...users];
-        let newUser: AppUser;
-        
+        return;
+      }
+      
+      const emailLower = (firebaseUser.email || '').toLowerCase();
+      const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
+      
+      const matched = users.find(u => u.email.toLowerCase() === emailLower);
+      
+      if (matched) {
+        // User already in database
+        const savedSessionId = localStorage.getItem('studio_current_user_id_v2');
+        if (savedSessionId) {
+          const sessionUser = users.find(u => u.id === savedSessionId);
+          if (sessionUser) {
+            setCurrentUser(sessionUser);
+            setActiveRole(sessionUser.role);
+            return;
+          }
+        }
+        setCurrentUser(matched);
+        setActiveRole(matched.role);
+        localStorage.setItem('studio_current_user_id_v2', matched.id);
+      } else if (users.length > 0) {
+        // User not found, let's create them!
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
-          
-        if (isSuperAdmin) {
-          // Update the pre-existing u-admin
-          const adminIdx = users.findIndex(u => u.id === 'u-admin');
-          newUser = {
-            id: 'u-admin',
-            name: firebaseUser.displayName || 'Juan Codina',
-            email: firebaseUser.email || 'juan.codina@murciaeduca.es',
-            role: 'admin',
-            roles: ['admin', 'profesor', 'alumno'],
-            avatarUrl: firebaseUser.photoURL || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-            initials: initials || 'JC',
-            color: 'bg-emerald-600 text-white',
-            joinedAt: new Date().toISOString().split('T')[0]
-          };
-          if (adminIdx >= 0) {
-            updatedUsersList[adminIdx] = newUser;
-          } else {
-            updatedUsersList.push(newUser);
-          }
-        } else {
-          // Regular new student/teacher logged in with Google (placed in pending status first)
-          newUser = {
-            id: `u-${Date.now()}`,
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
-            email: firebaseUser.email || '',
-            role: 'pending',
-            roles: ['pending'],
-            avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
-            initials: initials,
-            color: 'bg-zinc-600 text-white',
-            joinedAt: new Date().toISOString().split('T')[0]
-          };
-          updatedUsersList.push(newUser);
-        }
         
-        setUsers(updatedUsersList);
-        localStorage.setItem('studio_users_v2', JSON.stringify(updatedUsersList));
-        setCurrentUser(newUser);
-        setActiveRole(newUser.role);
-        localStorage.setItem('studio_current_user_id_v2', newUser.id);
+        const newUser: AppUser = {
+          id: isSuperAdmin ? 'u-admin' : `u-${Date.now()}`,
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
+          email: emailLower,
+          role: isSuperAdmin ? 'admin' : 'pending',
+          roles: isSuperAdmin ? ['admin', 'profesor', 'alumno'] : ['pending'],
+          avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
+          initials: initials,
+          color: isSuperAdmin ? 'bg-emerald-600 text-white' : 'bg-zinc-600 text-white',
+          joinedAt: new Date().toISOString().split('T')[0]
+        };
+        
+        await setDoc(doc(db, 'users', newUser.id), newUser);
       }
-    }
-  }, [firebaseUser, users, currentUser]);
+    };
+    
+    syncUser();
+  }, [firebaseUser, users]);
 
-  // 2. Persist state updates to LocalStorage
-  const saveProjects = (updated: Project[]) => {
-    setProjects(updated);
-    localStorage.setItem('studio_projects_v2', JSON.stringify(updated));
-    // If we're inspecting a project, keep it fresh in the detail drawer
-    if (projectToInspect) {
-      const refreshed = updated.find(p => p.id === projectToInspect.id);
+  // Project inspect syncer
+  useEffect(() => {
+    if (projectToInspect && projects.length > 0) {
+      const refreshed = projects.find(p => p.id === projectToInspect.id);
       if (refreshed) {
         setProjectToInspect(refreshed);
       }
+    }
+  }, [projects, projectToInspect]);
+
+  const saveProjects = async (updated: Project[]) => {
+    for (const p of updated) {
+      await setDoc(doc(db, 'projects', p.id), p);
     }
   };
 
@@ -354,22 +316,11 @@ export default function App() {
     localStorage.setItem('studio_team_v2', JSON.stringify(updated));
   };
 
-  const saveUsers = (updated: AppUser[]) => {
-    setUsers(updated);
-    localStorage.setItem('studio_users_v2', JSON.stringify(updated));
-    if (currentUser) {
-      const refreshed = updated.find(u => u.id === currentUser.id);
-      if (refreshed) {
-        setCurrentUser(refreshed);
-      }
-    }
-  };
-
   const handleSwitchSession = (userId: string) => {
     const targetUser = users.find(u => u.id === userId);
     if (targetUser) {
       setCurrentUser(targetUser);
-      setActiveRole(targetUser.roles[0]);
+      setActiveRole(targetUser.role);
       localStorage.setItem('studio_current_user_id_v2', userId);
     }
   };
@@ -381,134 +332,104 @@ export default function App() {
     }
   };
 
-  const handleUpdateUser = (updatedUser: AppUser) => {
-    const updated = users.map(u => u.id === updatedUser.id ? updatedUser : u);
-    saveUsers(updated);
+  const handleUpdateUser = async (updatedUser: AppUser) => {
+    await setDoc(doc(db, 'users', updatedUser.id), updatedUser);
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const updated = users.filter(u => u.id !== userId);
-    saveUsers(updated);
+  const handleDeleteUser = async (userId: string) => {
+    await deleteDoc(doc(db, 'users', userId));
     if (currentUser?.id === userId) {
-      // fallback to admin
       handleSwitchSession('u-admin');
     }
   };
 
-  const handleAddUser = (newUser: AppUser) => {
-    const updated = [newUser, ...users];
-    saveUsers(updated);
+  const handleAddUser = async (newUser: AppUser) => {
+    await setDoc(doc(db, 'users', newUser.id), newUser);
   };
 
-  const handleCreateClassroom = (name: string) => {
-    const updated = [...classrooms, name];
-    setClassrooms(updated);
-    localStorage.setItem('studio_classrooms_v2', JSON.stringify(updated));
+  const handleCreateClassroom = async (name: string) => {
+    await setDoc(doc(db, 'classrooms', name), { name });
   };
 
-  const handleDeleteClassroom = (name: string) => {
-    const updatedClassrooms = classrooms.filter(c => c !== name);
-    setClassrooms(updatedClassrooms);
-    localStorage.setItem('studio_classrooms_v2', JSON.stringify(updatedClassrooms));
-
+  const handleDeleteClassroom = async (name: string) => {
+    await deleteDoc(doc(db, 'classrooms', name));
+    
     // Clear classroom from users
-    const updatedUsers = users.map(u => u.classroom === name ? { ...u, classroom: undefined } : u);
-    saveUsers(updatedUsers);
+    const usersToUpdate = users.filter(u => u.classroom === name);
+    for (const u of usersToUpdate) {
+      await setDoc(doc(db, 'users', u.id), { ...u, classroom: undefined });
+    }
 
     // Clear classroom from projects
     const updatedProjects = projects.map(p => p.classroom === name ? { ...p, classroom: undefined } : p);
     saveProjects(updatedProjects);
   };
 
-  const handleUpdateGrade = (studentId: string, taskId: string, score: number) => {
-    setStudentGrades(prev => {
-      const existingIdx = prev.findIndex(g => g.studentId === studentId && g.taskId === taskId);
-      let updated;
-      if (existingIdx >= 0) {
-        updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], score };
-      } else {
-        updated = [...prev, { studentId, taskId, score, isDelivered: true }];
-      }
-      localStorage.setItem('studio_student_grades_v2', JSON.stringify(updated));
-      return updated;
-    });
+  const handleUpdateGrade = async (studentId: string, taskId: string, score: number) => {
+    const docId = `${studentId}_${taskId}`;
+    const existing = studentGrades.find(g => g.studentId === studentId && g.taskId === taskId);
+    const isDelivered = existing ? existing.isDelivered : true;
+    await setDoc(doc(db, 'studentGrades', docId), { studentId, taskId, score, isDelivered });
   };
 
-  const handleToggleDelivery = (studentId: string, taskId: string, isDelivered: boolean) => {
-    setStudentGrades(prev => {
-      const existingIdx = prev.findIndex(g => g.studentId === studentId && g.taskId === taskId);
-      let updated;
-      if (existingIdx >= 0) {
-        updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], isDelivered };
-      } else {
-        updated = [...prev, { studentId, taskId, score: 0, isDelivered }];
-      }
-      localStorage.setItem('studio_student_grades_v2', JSON.stringify(updated));
-      return updated;
-    });
+  const handleToggleDelivery = async (studentId: string, taskId: string, isDelivered: boolean) => {
+    const docId = `${studentId}_${taskId}`;
+    const existing = studentGrades.find(g => g.studentId === studentId && g.taskId === taskId);
+    const score = existing ? existing.score : 0;
+    await setDoc(doc(db, 'studentGrades', docId), { studentId, taskId, score, isDelivered });
   };
 
-  const handleUpdateIndividualOralGrade = (studentId: string, updated: Partial<IndividualOralGrade>) => {
-    setIndividualOralGrades(prev => {
-      const idx = prev.findIndex(g => g.studentId === studentId);
-      let newGrades;
-      if (idx >= 0) {
-        newGrades = [...prev];
-        newGrades[idx] = { ...newGrades[idx], ...updated };
-      } else {
-        newGrades = [...prev, {
-          studentId,
-          teamGrade: 5.0,
-          expositionGrade: 5.0,
-          coevalItem1: 'neutral',
-          coevalItem2: 'neutral',
-          justification: '',
-          presented: true,
-          ...updated
-        } as IndividualOralGrade];
-      }
-      localStorage.setItem('studio_individual_oral_grades_v2', JSON.stringify(newGrades));
-      return newGrades;
-    });
+  const handleUpdateIndividualOralGrade = async (studentId: string, updated: Partial<IndividualOralGrade>) => {
+    const existing = individualOralGrades.find(g => g.studentId === studentId);
+    const base = existing || {
+      studentId,
+      teamGrade: 5.0,
+      expositionGrade: 5.0,
+      coevalItem1: 'neutral',
+      coevalItem2: 'neutral',
+      justification: '',
+      presented: true
+    };
+    const newGrade = { ...base, ...updated };
+    await setDoc(doc(db, 'individualOralGrades', studentId), newGrade);
   };
 
-  const handleUpdateOralGradeConfig = (maxTeam: number, maxExposition: number, maxCoeval: number) => {
+  const handleUpdateOralGradeConfig = async (maxTeam: number, maxExposition: number, maxCoeval: number) => {
     setMaxTeamScore(maxTeam);
     setMaxExpositionScore(maxExposition);
     setMaxCoevalAdjustment(maxCoeval);
-    localStorage.setItem('studio_max_team_score_v2', maxTeam.toString());
-    localStorage.setItem('studio_max_expo_score_v2', maxExposition.toString());
-    localStorage.setItem('studio_max_coeval_adjust_v2', maxCoeval.toString());
+    await setDoc(doc(db, 'config', 'ies'), {
+      maxTeamScore: maxTeam,
+      maxExpositionScore: maxExposition,
+      maxCoevalAdjustment: maxCoeval
+    }, { merge: true });
   };
 
-  const handleUpdateTaskWeights = (weights: { [taskId: string]: number }) => {
-    setAssessmentTasks(prev => {
-      const updated = prev.map(task => ({
-        ...task,
-        weight: weights[task.id] !== undefined ? weights[task.id] : (task.weight ?? 0.0)
-      }));
-      localStorage.setItem('studio_assessment_tasks_v2', JSON.stringify(updated));
-      return updated;
-    });
+  const handleUpdateTaskWeights = async (weights: { [taskId: string]: number }) => {
+    const updatedTasks = assessmentTasks.map(task => ({
+      ...task,
+      weight: weights[task.id] !== undefined ? weights[task.id] : (task.weight ?? 0.0)
+    }));
+    setAssessmentTasks(updatedTasks);
+    await setDoc(doc(db, 'config', 'ies'), { assessmentTasks: updatedTasks }, { merge: true });
   };
 
-  const handleAddAssessmentTask = () => {
+  const handleAddAssessmentTask = async () => {
     const newTask: AssessmentTask = {
       id: `at${Date.now()}`,
       title: 'Nueva Tarea Evaluable',
-      criterionIds: ['1a']
+      criterionIds: ['1a'],
+      weight: 1.0
     };
-    const updated = [...assessmentTasks, newTask];
-    setAssessmentTasks(updated);
-    localStorage.setItem('studio_assessment_tasks_v2', JSON.stringify(updated));
+    const updatedTasks = [...assessmentTasks, newTask];
+    setAssessmentTasks(updatedTasks);
+    await setDoc(doc(db, 'config', 'ies'), { assessmentTasks: updatedTasks }, { merge: true });
   };
 
-  const handlePublishAnnouncement = (text: string, authorName: string) => {
+  const handlePublishAnnouncement = async (text: string, authorName: string) => {
     const newAnn: Announcement = {
       id: `ann-${Date.now()}`,
       text,
@@ -516,58 +437,40 @@ export default function App() {
       author: authorName,
       readByStudentIds: []
     };
-    setAnnouncements(prev => {
-      const updated = [newAnn, ...prev];
-      localStorage.setItem('studio_announcements_v2', JSON.stringify(updated));
-      return updated;
-    });
+    await setDoc(doc(db, 'announcements', newAnn.id), newAnn);
   };
 
-  const handleToggleReadAnnouncement = (annId: string, studentId: string) => {
-    setAnnouncements(prev => {
-      const updated = prev.map(ann => {
-        if (ann.id === annId) {
-          const reads = ann.readByStudentIds || [];
-          const alreadyRead = reads.includes(studentId);
-          return {
-            ...ann,
-            readByStudentIds: alreadyRead 
-              ? reads.filter(id => id !== studentId) 
-              : [...reads, studentId]
-          };
-        }
-        return ann;
-      });
-      localStorage.setItem('studio_announcements_v2', JSON.stringify(updated));
-      return updated;
-    });
+  const handleToggleReadAnnouncement = async (annId: string, studentId: string) => {
+    const ann = announcements.find(a => a.id === annId);
+    if (ann) {
+      const reads = ann.readByStudentIds || [];
+      const alreadyRead = reads.includes(studentId);
+      const updatedReads = alreadyRead 
+        ? reads.filter(id => id !== studentId) 
+        : [...reads, studentId];
+      await setDoc(doc(db, 'announcements', annId), { ...ann, readByStudentIds: updatedReads });
+    }
   };
 
-  const handleUpdateIesSettings = (name: string, logo: string) => {
+  const handleUpdateIesSettings = async (name: string, logo: string) => {
     setIesName(name);
     setIesLogo(logo);
-    localStorage.setItem('studio_ies_name_v2', name);
-    localStorage.setItem('studio_ies_logo_v2', logo);
+    await setDoc(doc(db, 'config', 'ies'), { iesName: name, iesLogo: logo }, { merge: true });
   };
 
-  const handleUpdateCoevaluationImpact = (impact: number) => {
+  const handleUpdateCoevaluationImpact = async (impact: number) => {
     setMaxCoevaluationImpact(impact);
-    localStorage.setItem('studio_coeval_impact_v2', impact.toString());
+    await setDoc(doc(db, 'config', 'ies'), { maxCoevaluationImpact: impact }, { merge: true });
   };
 
-  // 3. Project Handlers
-  const handleCreateOrUpdateProject = (projectData: Partial<Project>) => {
+  const handleCreateOrUpdateProject = async (projectData: Partial<Project>) => {
     if (projectData.id) {
-      // EDIT MODE
-      const updated = projects.map(p => {
-        if (p.id === projectData.id) {
-          return { ...p, ...projectData, lastUpdated: new Date().toISOString() } as Project;
-        }
-        return p;
-      });
-      saveProjects(updated);
+      const existing = projects.find(p => p.id === projectData.id);
+      if (existing) {
+        const updated = { ...existing, ...projectData, lastUpdated: new Date().toISOString() } as Project;
+        await setDoc(doc(db, 'projects', updated.id), updated);
+      }
     } else {
-      // CREATE MODE
       const newProject: Project = {
         id: `proj_${Date.now()}`,
         name: projectData.name || 'Nuevo Proyecto',
@@ -585,51 +488,167 @@ export default function App() {
         lastUpdated: new Date().toISOString(),
         classroom: projectData.classroom
       };
-      saveProjects([newProject, ...projects]);
+      await setDoc(doc(db, 'projects', newProject.id), newProject);
     }
     setProjectToEdit(null);
     setIsFormModalOpen(false);
   };
 
-  const handleDeleteProject = (projectId: string) => {
+  const handleDeleteProject = async (projectId: string) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este proyecto de forma permanente?')) {
-      const updated = projects.filter(p => p.id !== projectId);
-      saveProjects(updated);
+      await deleteDoc(doc(db, 'projects', projectId));
       if (projectToInspect?.id === projectId) {
         setProjectToInspect(null);
       }
     }
   };
 
-  const handleToggleTask = (projectId: string, taskId: string) => {
-    const updated = projects.map(p => {
-      if (p.id === projectId) {
-        const updatedTasks = p.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t);
-        // Recalculate progress based on task checklist completeness
-        const completedCount = updatedTasks.filter(t => t.completed).length;
-        const progress = updatedTasks.length > 0 
-          ? Math.round((completedCount / updatedTasks.length) * 100) 
-          : p.progress;
+  const handleToggleTask = async (projectId: string, taskId: string) => {
+    const p = projects.find(proj => proj.id === projectId);
+    if (p) {
+      const updatedTasks = p.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t);
+      const completedCount = updatedTasks.filter(t => t.completed).length;
+      const progress = updatedTasks.length > 0 
+        ? Math.round((completedCount / updatedTasks.length) * 100) 
+        : p.progress;
 
-        // Auto adjust status if 100% complete
-        let status = p.status;
-        if (progress === 100 && p.status !== 'completed') {
-          status = 'completed';
-        } else if (progress < 100 && p.status === 'completed') {
-          status = 'active';
-        }
+      let status = p.status;
+      if (progress === 100 && p.status !== 'completed') {
+        status = 'completed';
+      } else if (progress < 100 && p.status === 'completed') {
+        status = 'active';
+      }
 
-        return {
-          ...p,
-          tasks: updatedTasks,
-          progress,
-          status,
+      const updated = {
+        ...p,
+        tasks: updatedTasks,
+        progress,
+        status,
+        lastUpdated: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'projects', projectId), updated);
+    }
+  };
+
+  const handleUpdateUserProfile = async (userId: string, newName: string, newAvatarUrl: string) => {
+    const userToUpdate = users.find(u => u.id === userId);
+    if (userToUpdate) {
+      const updatedUser = { ...userToUpdate, name: newName, avatarUrl: newAvatarUrl };
+      const initials = newName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      updatedUser.initials = initials;
+      await handleUpdateUser(updatedUser);
+    }
+  };
+
+  const handleJoinProject = async (projectId: string, studentId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      if (!project.team.includes(studentId)) {
+        const updatedTeam = [...project.team, studentId];
+        const gastState = project.gastronomicState || {
+          restaurantName: '',
+          locationArea: 'No seleccionada',
+          conceptDescription: '',
+          marketStudy: '',
+          isOpen: true,
+          modoEdicion: true,
+          dishes: [],
+          roles: {
+            projectManager: '',
+            marketingDirector: '',
+            operationsManager: '',
+            financialOfficer: '',
+            chef: ''
+          }
+        };
+        await setDoc(doc(db, 'projects', projectId), {
+          ...project,
+          team: updatedTeam,
+          gastronomicState: gastState,
           lastUpdated: new Date().toISOString()
+        });
+      }
+    }
+  };
+
+  const handleLeaveProject = async (projectId: string, studentId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      const updatedTeam = project.team.filter(id => id !== studentId);
+      let gastState = project.gastronomicState;
+      if (gastState) {
+        const roles = { ...gastState.roles };
+        if (roles.projectManager === studentId) roles.projectManager = '';
+        if (roles.marketingDirector === studentId) roles.marketingDirector = '';
+        if (roles.operationsManager === studentId) roles.operationsManager = '';
+        if (roles.financialOfficer === studentId) roles.financialOfficer = '';
+        if (roles.chef === studentId) roles.chef = '';
+        
+        const isOpen = updatedTeam.length === 0 ? true : gastState.isOpen;
+        
+        gastState = {
+          ...gastState,
+          isOpen,
+          roles
         };
       }
-      return p;
-    });
-    saveProjects(updated);
+      await setDoc(doc(db, 'projects', projectId), {
+        ...project,
+        team: updatedTeam,
+        status: updatedTeam.length === 0 ? 'planning' : project.status,
+        gastronomicState: gastState,
+        lastUpdated: new Date().toISOString()
+      });
+    }
+  };
+
+  const handleCloseTeam = async (projectId: string, coordinatorId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      let gastState = project.gastronomicState || {
+        restaurantName: '',
+        locationArea: 'No seleccionada',
+        conceptDescription: '',
+        marketStudy: '',
+        isOpen: true,
+        modoEdicion: true,
+        dishes: [],
+        roles: {
+          projectManager: '',
+          marketingDirector: '',
+          operationsManager: '',
+          financialOfficer: '',
+          chef: ''
+        }
+      };
+      
+      gastState = {
+        ...gastState,
+        isOpen: false,
+        roles: {
+          ...gastState.roles,
+          projectManager: coordinatorId
+        }
+      };
+
+      await setDoc(doc(db, 'projects', projectId), {
+        ...project,
+        status: 'active',
+        gastronomicState: gastState,
+        lastUpdated: new Date().toISOString()
+      });
+    }
+  };
+
+  const handleUpdateProjectGastronomicState = async (projectId: string, gastronomicState: any) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      await setDoc(doc(db, 'projects', projectId), {
+        ...project,
+        gastronomicState,
+        lastUpdated: new Date().toISOString()
+      });
+    }
   };
 
   // 4. Team Member Handlers
@@ -749,6 +768,8 @@ export default function App() {
           onPublishAnnouncement={handlePublishAnnouncement}
           activeRole={activeRole}
           onChangeActiveRole={handleChangeRole}
+          onUpdateUserProfile={handleUpdateUserProfile}
+          onUpdateProjectGastronomicState={handleUpdateProjectGastronomicState}
         />
       );
     }
@@ -784,6 +805,11 @@ export default function App() {
           }}
           activeRole={activeRole}
           onChangeActiveRole={handleChangeRole}
+          onUpdateUserProfile={handleUpdateUserProfile}
+          onJoinProject={handleJoinProject}
+          onLeaveProject={handleLeaveProject}
+          onCloseTeam={handleCloseTeam}
+          onUpdateProjectGastronomicState={handleUpdateProjectGastronomicState}
         />
       );
     }
@@ -910,14 +936,28 @@ export default function App() {
 
           {/* Administrator Profile Card */}
           <div className={`p-4 border-t border-zinc-150 bg-zinc-50/50 ${isMobileMenuOpen ? 'block' : 'hidden md:block'}`}>
-            <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-zinc-200/60 shadow-xs">
-              <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-inner">
-                JC
-              </div>
+            <div 
+              onClick={() => setIsEditingAdminProfile(true)}
+              className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-zinc-200/60 shadow-xs hover:border-zinc-300 hover:shadow-sm cursor-pointer transition-all group"
+              title="Haz clic para modificar tu nombre o cambiar tu foto"
+            >
+              {currentUser?.avatarUrl ? (
+                <img 
+                  src={currentUser.avatarUrl} 
+                  alt={currentUser.name} 
+                  className="w-8 h-8 rounded-full object-cover shadow-inner shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-inner shrink-0">
+                  {currentUser?.initials || 'JC'}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
-                <span className="font-bold text-xs text-zinc-900 block truncate">{currentUser.name}</span>
+                <span className="font-bold text-xs text-zinc-900 group-hover:text-emerald-700 transition-colors block truncate">{currentUser?.name}</span>
                 <span className="text-[10px] text-zinc-400 font-medium block truncate">Administrador Principal</span>
               </div>
+              <PenTool className="h-3.5 w-3.5 text-zinc-300 group-hover:text-zinc-500 transition-colors shrink-0" />
             </div>
           </div>
 
@@ -1168,6 +1208,74 @@ export default function App() {
             onEdit={openEditModal}
             onDelete={handleDeleteProject}
           />
+
+          {/* Admin Profile Edit Modal */}
+          {isEditingAdminProfile && currentUser && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-md w-full border border-zinc-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-6 py-5 border-b border-zinc-150 bg-zinc-50 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-zinc-900 tracking-tight">Editar Perfil de Administrador</h3>
+                  <button 
+                    onClick={() => setIsEditingAdminProfile(false)}
+                    className="p-1 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const name = formData.get('name') as string;
+                    const avatarUrl = formData.get('avatarUrl') as string;
+                    if (name.trim()) {
+                      await handleUpdateUserProfile(currentUser.id, name.trim(), avatarUrl.trim());
+                      setIsEditingAdminProfile(false);
+                    }
+                  }}
+                  className="p-6 space-y-4"
+                >
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+                    <input 
+                      type="text" 
+                      name="name" 
+                      defaultValue={currentUser.name}
+                      required
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-250 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-xs"
+                      placeholder="Ej. Juan Carlos"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1.5">URL de Foto de Perfil (Avatar)</label>
+                    <input 
+                      type="url" 
+                      name="avatarUrl" 
+                      defaultValue={currentUser.avatarUrl || ''}
+                      className="w-full px-3.5 py-2 rounded-xl border border-zinc-250 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-xs"
+                      placeholder="https://ejemplo.com/foto.jpg"
+                    />
+                    <span className="text-[10px] text-zinc-400 mt-1 block">Deja vacío para usar iniciales.</span>
+                  </div>
+                  <div className="pt-2 border-t border-zinc-100 flex items-center justify-end gap-2.5">
+                    <button 
+                      type="button" 
+                      onClick={() => setIsEditingAdminProfile(false)}
+                      className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-sm"
+                    >
+                      Guardar Cambios
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

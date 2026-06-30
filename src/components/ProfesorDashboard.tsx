@@ -29,7 +29,8 @@ import {
   LineChart,
   ChevronDown,
   ChevronRight,
-  Search
+  Search,
+  X
 } from 'lucide-react';
 import { AppUser, Project, Task, AssessmentTask, StudentGrade, IndividualOralGrade, Announcement } from '../types';
 import RATab from './RATab';
@@ -61,6 +62,8 @@ interface ProfesorDashboardProps {
   onPublishAnnouncement: (text: string, authorName: string) => void;
   activeRole?: string;
   onChangeActiveRole?: (role: any) => void;
+  onUpdateUserProfile: (userId: string, newName: string, newAvatarUrl: string) => void;
+  onUpdateProjectGastronomicState: (projectId: string, gastronomicState: any) => void;
 }
 
 const DEFAULT_GASTRONOMIC_STATE = {
@@ -178,7 +181,9 @@ export default function ProfesorDashboard({
   announcements,
   onPublishAnnouncement,
   activeRole,
-  onChangeActiveRole
+  onChangeActiveRole,
+  onUpdateUserProfile,
+  onUpdateProjectGastronomicState
 }: ProfesorDashboardProps) {
   // Navigation tabs: classroom (Aula e Indicadores), ra (Gestión de RA), tracking (Seguimiento), task-grading (Calificación por Tarea)
   const [activeTab, setActiveTab] = useState<string>('classroom');
@@ -191,6 +196,7 @@ export default function ProfesorDashboard({
 
   // Local state to display success banner on save
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // Load simulated gastronomy state from localStorage or fallback
   const [gastState, setGastState] = useState(() => {
@@ -461,15 +467,19 @@ export default function ProfesorDashboard({
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div 
+            onClick={() => setIsEditingProfile(true)}
+            className="flex items-center gap-3 cursor-pointer group hover:bg-zinc-100 p-1.5 rounded-xl transition-all"
+            title="Editar Perfil"
+          >
             <img 
               src={currentUser.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(currentUser.name)}`} 
               alt={currentUser.name} 
               referrerPolicy="no-referrer"
-              className="w-9 h-9 rounded-full object-cover border border-zinc-200"
+              className="w-9 h-9 rounded-full object-cover border border-zinc-200 shadow-xs shrink-0 group-hover:border-indigo-400"
             />
             <div className="text-left hidden sm:block">
-              <span className="font-extrabold text-xs text-zinc-900 block leading-tight">{currentUser.name}</span>
+              <span className="font-extrabold text-xs text-zinc-900 group-hover:text-indigo-600 transition-colors block leading-tight">{currentUser.name}</span>
               <span className="text-[10px] text-zinc-400 block font-mono">{currentUser.email}</span>
             </div>
           </div>
@@ -1404,6 +1414,74 @@ export default function ProfesorDashboard({
           maxCoevalAdjustment={maxCoevalAdjustment}
           onClose={() => setSelectedStudentForDossier(null)}
         />
+      )}
+
+      {/* Professor Profile Edit Modal */}
+      {isEditingProfile && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-zinc-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="px-6 py-5 border-b border-zinc-150 bg-zinc-50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-900 tracking-tight">Editar Perfil del Profesor</h3>
+              <button 
+                onClick={() => setIsEditingProfile(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const name = formData.get('name') as string;
+                const avatarUrl = formData.get('avatarUrl') as string;
+                if (name.trim()) {
+                  await onUpdateUserProfile(currentUser.id, name.trim(), avatarUrl.trim());
+                  setIsEditingProfile(false);
+                }
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1.5">Nombre de Profesor</label>
+                <input 
+                  type="text" 
+                  name="name" 
+                  defaultValue={currentUser.name}
+                  required
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-250 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white shadow-xs"
+                  placeholder="Ej. Carmen Santos"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1.5">URL de Foto (Avatar)</label>
+                <input 
+                  type="url" 
+                  name="avatarUrl" 
+                  defaultValue={currentUser.avatarUrl || ''}
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-250 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white shadow-xs"
+                  placeholder="https://ejemplo.com/foto.jpg"
+                />
+                <span className="text-[10px] text-zinc-400 mt-1 block">Deja vacío para usar una ilustración por defecto.</span>
+              </div>
+              <div className="pt-2 border-t border-zinc-100 flex items-center justify-end gap-2.5">
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditingProfile(false)}
+                  className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>

@@ -188,6 +188,11 @@ interface AlumnoDashboardProps {
   onUpdateStudentName: (studentId: string, newName: string) => void;
   activeRole?: string;
   onChangeActiveRole?: (role: any) => void;
+  onUpdateUserProfile: (userId: string, newName: string, newAvatarUrl: string) => void;
+  onJoinProject: (projectId: string, studentId: string) => void;
+  onLeaveProject: (projectId: string, studentId: string) => void;
+  onCloseTeam: (projectId: string, coordinatorId: string) => void;
+  onUpdateProjectGastronomicState: (projectId: string, gastronomicState: any) => void;
 }
 
 // Default initial state for local gastronomy project simulation
@@ -350,7 +355,12 @@ export default function AlumnoDashboard({
   onToggleReadAnnouncement,
   onUpdateStudentName,
   activeRole,
-  onChangeActiveRole
+  onChangeActiveRole,
+  onUpdateUserProfile,
+  onJoinProject,
+  onLeaveProject,
+  onCloseTeam,
+  onUpdateProjectGastronomicState
 }: AlumnoDashboardProps) {
   // Current active sub-tab/view inside the simulator
   const [activeMenu, setActiveMenu] = useState<string>('panel-principal');
@@ -359,6 +369,9 @@ export default function AlumnoDashboard({
   // Student name edit state
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState(currentUser.name);
+  const [isEditingStudentProfile, setIsEditingStudentProfile] = useState(false);
+  const [selectedCoordinatorId, setSelectedCoordinatorId] = useState<string>('');
+  const [isCloseTeamDialogOpen, setIsCloseTeamDialogOpen] = useState(false);
 
   useEffect(() => {
     setEditNameValue(currentUser.name);
@@ -546,9 +559,25 @@ export default function AlumnoDashboard({
     }, 3000);
   };
 
-  const isCoordinator = gastState.roles.projectManager === currentUser.id;
-  const isCreative = gastState.roles.marketingDirector === currentUser.id;
-  const canEditTask4 = isCoordinator || isCreative || !gastState.roles.projectManager;
+  // Synchronize gastState from Firestore's joinedProject
+  const currentProject = projects.find(p => p.team?.includes(currentUser.id));
+
+  useEffect(() => {
+    if (currentProject?.gastronomicState) {
+      setGastState(currentProject.gastronomicState);
+    } else if (currentProject) {
+      setGastState({
+        ...INITIAL_GASTRONOMIC_STATE,
+        restaurantName: currentProject.name,
+        conceptDescription: currentProject.description || '',
+        projectName: currentProject.name
+      });
+    }
+  }, [currentProject]);
+
+  const isCoordinator = gastState.roles?.projectManager === currentUser.id;
+  const isCreative = gastState.roles?.marketingDirector === currentUser.id;
+  const canEditTask4 = isCoordinator || isCreative || !gastState.roles?.projectManager;
 
   // Helper to update fields
   const updateField = (section: string, value: any) => {
@@ -556,10 +585,14 @@ export default function AlumnoDashboard({
       triggerToast('⚠️ Activa el MODO EDICIÓN en el menú izquierdo para modificar los campos.');
       return;
     }
-    setGastState((prev: any) => ({
-      ...prev,
+    const updated = {
+      ...gastState,
       [section]: value
-    }));
+    };
+    setGastState(updated);
+    if (currentProject) {
+      onUpdateProjectGastronomicState(currentProject.id, updated);
+    }
   };
 
   const updateNestedField = (section: string, field: string, value: any) => {
@@ -567,13 +600,17 @@ export default function AlumnoDashboard({
       triggerToast('⚠️ Activa el MODO EDICIÓN en el menú izquierdo para modificar los campos.');
       return;
     }
-    setGastState((prev: any) => ({
-      ...prev,
+    const updated = {
+      ...gastState,
       [section]: {
-        ...prev[section],
+        ...gastState[section],
         [field]: value
       }
-    }));
+    };
+    setGastState(updated);
+    if (currentProject) {
+      onUpdateProjectGastronomicState(currentProject.id, updated);
+    }
   };
 
   // Add a new dish to Menu Design
@@ -662,7 +699,11 @@ export default function AlumnoDashboard({
                 type="button"
                 onClick={() => {
                   const nextVal = !gastState.modoEdicion;
-                  setGastState((prev: any) => ({ ...prev, modoEdicion: nextVal }));
+                  const updated = { ...gastState, modoEdicion: nextVal };
+                  setGastState(updated);
+                  if (currentProject) {
+                    onUpdateProjectGastronomicState(currentProject.id, updated);
+                  }
                   triggerToast(nextVal ? '⚡ Modo Edición Activado' : '🔒 Modo Lectura Activado');
                 }}
                 className="focus:outline-none cursor-pointer text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -724,174 +765,177 @@ export default function AlumnoDashboard({
             </button>
           </div>
 
-          {/* FASE 1: CONFIGURACIÓN */}
-          <div className="space-y-1">
-            <button 
-              onClick={() => setCollapsedPhases(prev => prev.includes('fase1') ? prev.filter(p => p !== 'fase1') : [...prev, 'fase1'])}
-              className="w-full px-3 flex items-center justify-between py-1 hover:bg-zinc-800/30 rounded-lg transition-colors group cursor-pointer"
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <span className="text-[10px] uppercase font-black tracking-widest text-blue-500">
-                  Fase 1: Configuración
-                </span>
-              </div>
-              {collapsedPhases.includes('fase1') ? (
-                <ChevronRight className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
-              ) : (
-                <ChevronDown className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
-              )}
-            </button>
-            
-            {!collapsedPhases.includes('fase1') && (
-              <motion.div 
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-1"
-              >
-                <button
-                  onClick={() => setActiveMenu('step-1')}
-                  className={`w-full flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    activeMenu === 'step-1'
-                      ? 'bg-zinc-800 text-white font-bold border-l-2 border-blue-500'
-                      : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-200'
-                  }`}
+          {currentProject && currentProject.gastronomicState && !currentProject.gastronomicState.isOpen && (
+            <>
+              {/* FASE 1: CONFIGURACIÓN */}
+              <div className="space-y-1">
+                <button 
+                  onClick={() => setCollapsedPhases(prev => prev.includes('fase1') ? prev.filter(p => p !== 'fase1') : [...prev, 'fase1'])}
+                  className="w-full px-3 flex items-center justify-between py-1 hover:bg-zinc-800/30 rounded-lg transition-colors group cursor-pointer"
                 >
-                  <Users className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                  <span className="truncate">1. Equipo y Zona</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-blue-500">
+                      Fase 1: Configuración
+                    </span>
+                  </div>
+                  {collapsedPhases.includes('fase1') ? (
+                    <ChevronRight className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                  )}
                 </button>
-
-                <button
-                  onClick={() => setActiveMenu('step-2')}
-                  className={`w-full flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    activeMenu === 'step-2'
-                      ? 'bg-zinc-800 text-white font-bold border-l-2 border-blue-500'
-                      : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <Briefcase className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                  <span className="truncate">2. Panel de Reparto Global</span>
-                </button>
-              </motion.div>
-            )}
-          </div>
-
-          {/* FASE 2: EJECUCIÓN */}
-          <div className="space-y-1">
-            <button 
-              onClick={() => setCollapsedPhases(prev => prev.includes('fase2') ? prev.filter(p => p !== 'fase2') : [...prev, 'fase2'])}
-              className="w-full px-3 flex items-center justify-between py-1 hover:bg-zinc-800/30 rounded-lg transition-colors group cursor-pointer"
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] uppercase font-black tracking-widest text-emerald-500">
-                  Fase 2: Ejecución
-                </span>
-              </div>
-              {collapsedPhases.includes('fase2') ? (
-                <ChevronRight className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
-              ) : (
-                <ChevronDown className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
-              )}
-            </button>
-
-            {!collapsedPhases.includes('fase2') && (
-              <motion.div 
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-1"
-              >
-                {[
-                  { id: 'step-3', icon: Activity, text: '3. Análisis' },
-                  { id: 'step-4', icon: Utensils, text: '4. Diseño de Carta' },
-                  { id: 'step-5', icon: ChefHat, text: '5. Prototipos' },
-                  { id: 'step-6', icon: FileText, text: '6. Memoria Intermedia' },
-                  { id: 'step-7', icon: TrendingUp, text: '7. Viabilidad' },
-                  { id: 'step-8', icon: Flame, text: '8. Producción Final' },
-                  { id: 'step-9', icon: Scale, text: '9. Coevaluación' },
-                  { id: 'step-10', icon: Award, text: '10. Memoria Final' }
-                ].map((step) => {
-                  const IconComp = step.icon;
-                  return (
+                
+                {!collapsedPhases.includes('fase1') && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-1"
+                  >
                     <button
-                      key={step.id}
-                      onClick={() => setActiveMenu(step.id)}
+                      onClick={() => setActiveMenu('step-1')}
                       className={`w-full flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        activeMenu === step.id
-                          ? 'bg-zinc-800 text-white font-bold border-l-2 border-emerald-500'
+                        activeMenu === 'step-1'
+                          ? 'bg-zinc-800 text-white font-bold border-l-2 border-blue-500'
                           : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      <IconComp className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                      <span className="truncate text-left">{step.text}</span>
+                      <Users className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                      <span className="truncate">1. Equipo y Zona</span>
                     </button>
-                  );
-                })}
-              </motion.div>
-            )}
-          </div>
 
-          {/* FASE 3: TAREAS */}
-          <div className="space-y-1">
-            <button 
-              onClick={() => setCollapsedPhases(prev => prev.includes('fase3') ? prev.filter(p => p !== 'fase3') : [...prev, 'fase3'])}
-              className="w-full px-3 flex items-center justify-between py-1 hover:bg-zinc-800/30 rounded-lg transition-colors group cursor-pointer"
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span className="text-[10px] uppercase font-black tracking-widest text-amber-500">
-                  Fase 3: Tareas
-                </span>
-              </div>
-              {collapsedPhases.includes('fase3') ? (
-                <ChevronRight className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
-              ) : (
-                <ChevronDown className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
-              )}
-            </button>
-            
-            {!collapsedPhases.includes('fase3') && (
-              <motion.div 
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-1"
-              >
-                {[
-                  { id: 'step-11', text: '1. Entregable Tarea 1' },
-                  { id: 'step-12', text: '2. Entregable Tarea 2' },
-                  { id: 'step-13', text: '3. Entregable Tarea 3' },
-                  { id: 'step-14', text: '4. Entregable Tarea 4' },
-                  { id: 'step-15', text: '5. Entregable Tarea 5' },
-                  { id: 'step-16', text: '6. Informe Coevaluación' },
-                  { id: 'step-17', text: '7. Memoria Final del Proyecto' }
-                ].map((step) => {
-                  const isDelivered = studentGrades.find(g => g.studentId === currentUser.id && g.taskId === step.id)?.isDelivered;
-                  return (
                     <button
-                      key={step.id}
-                      onClick={() => setActiveMenu(step.id)}
-                      className={`w-full flex items-center justify-between gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        activeMenu === step.id
-                          ? 'bg-zinc-800 text-white font-bold border-l-2 border-amber-500'
+                      onClick={() => setActiveMenu('step-2')}
+                      className={`w-full flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        activeMenu === 'step-2'
+                          ? 'bg-zinc-800 text-white font-bold border-l-2 border-blue-500'
                           : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <CheckSquare className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
-                        <span className="truncate text-left">{step.text}</span>
-                      </div>
-                      {isDelivered && (
-                        <div className="bg-emerald-500/20 p-0.5 rounded shadow-sm">
-                          <Check className="h-2.5 w-2.5 text-emerald-500" />
-                        </div>
-                      )}
+                      <Briefcase className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                      <span className="truncate">2. Panel de Reparto Global</span>
                     </button>
-                  );
-                })}
-              </motion.div>
-            )}
-          </div>
+                  </motion.div>
+                )}
+              </div>
 
+              {/* FASE 2: EJECUCIÓN */}
+              <div className="space-y-1">
+                <button 
+                  onClick={() => setCollapsedPhases(prev => prev.includes('fase2') ? prev.filter(p => p !== 'fase2') : [...prev, 'fase2'])}
+                  className="w-full px-3 flex items-center justify-between py-1 hover:bg-zinc-800/30 rounded-lg transition-colors group cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-emerald-500">
+                      Fase 2: Ejecución
+                    </span>
+                  </div>
+                  {collapsedPhases.includes('fase2') ? (
+                    <ChevronRight className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                  )}
+                </button>
+
+                {!collapsedPhases.includes('fase2') && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-1"
+                  >
+                    {[
+                      { id: 'step-3', icon: Activity, text: '3. Análisis' },
+                      { id: 'step-4', icon: Utensils, text: '4. Diseño de Carta' },
+                      { id: 'step-5', icon: ChefHat, text: '5. Prototipos' },
+                      { id: 'step-6', icon: FileText, text: '6. Memoria Intermedia' },
+                      { id: 'step-7', icon: TrendingUp, text: '7. Viabilidad' },
+                      { id: 'step-8', icon: Flame, text: '8. Producción Final' },
+                      { id: 'step-9', icon: Scale, text: '9. Coevaluación' },
+                      { id: 'step-10', icon: Award, text: '10. Memoria Final' }
+                    ].map((step) => {
+                      const IconComp = step.icon;
+                      return (
+                        <button
+                          key={step.id}
+                          onClick={() => setActiveMenu(step.id)}
+                          className={`w-full flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            activeMenu === step.id
+                              ? 'bg-zinc-800 text-white font-bold border-l-2 border-emerald-500'
+                              : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          <IconComp className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                          <span className="truncate text-left">{step.text}</span>
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* FASE 3: TAREAS */}
+              <div className="space-y-1">
+                <button 
+                  onClick={() => setCollapsedPhases(prev => prev.includes('fase3') ? prev.filter(p => p !== 'fase3') : [...prev, 'fase3'])}
+                  className="w-full px-3 flex items-center justify-between py-1 hover:bg-zinc-800/30 rounded-lg transition-colors group cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span className="text-[10px] uppercase font-black tracking-widest text-amber-500">
+                      Fase 3: Tareas
+                    </span>
+                  </div>
+                  {collapsedPhases.includes('fase3') ? (
+                    <ChevronRight className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-zinc-500 group-hover:text-zinc-300" />
+                  )}
+                </button>
+                
+                {!collapsedPhases.includes('fase3') && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-1"
+                  >
+                    {[
+                      { id: 'step-11', text: '1. Entregable Tarea 1' },
+                      { id: 'step-12', text: '2. Entregable Tarea 2' },
+                      { id: 'step-13', text: '3. Entregable Tarea 3' },
+                      { id: 'step-14', text: '4. Entregable Tarea 4' },
+                      { id: 'step-15', text: '5. Entregable Tarea 5' },
+                      { id: 'step-16', text: '6. Informe Coevaluación' },
+                      { id: 'step-17', text: '7. Memoria Final del Proyecto' }
+                    ].map((step) => {
+                      const isDelivered = studentGrades.find(g => g.studentId === currentUser.id && g.taskId === step.id)?.isDelivered;
+                      return (
+                        <button
+                          key={step.id}
+                          onClick={() => setActiveMenu(step.id)}
+                          className={`w-full flex items-center justify-between gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            activeMenu === step.id
+                              ? 'bg-zinc-800 text-white font-bold border-l-2 border-amber-500'
+                              : 'hover:bg-zinc-800/50 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <CheckSquare className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                            <span className="truncate text-left">{step.text}</span>
+                          </div>
+                          {isDelivered && (
+                            <div className="bg-emerald-500/20 p-0.5 rounded shadow-sm">
+                              <Check className="h-2.5 w-2.5 text-emerald-500" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </div>
+            </>
+          )}
 
         </div>
 
@@ -904,7 +948,7 @@ export default function AlumnoDashboard({
                 onClick={handleCopyCode}
                 className="flex items-center gap-1 text-[10px] font-bold font-mono text-emerald-400 bg-emerald-950/50 border border-emerald-900/60 px-1.5 py-0.5 rounded cursor-pointer hover:bg-emerald-900 hover:text-white transition-colors"
               >
-                <span>#{gastState.id}</span>
+                <span>#{gastState?.id || '----'}</span>
                 <Copy className="h-2.5 w-2.5" />
               </button>
             </div>
@@ -912,38 +956,40 @@ export default function AlumnoDashboard({
             <div className="space-y-1">
               <div className="flex justify-between">
                 <span className="text-zinc-500 text-[11px]">Equipo:</span>
-                <span className="font-bold text-zinc-200 truncate max-w-[110px]" title={gastState.teamName}>
-                  {gastState.teamName}
+                <span className="font-bold text-zinc-200 truncate max-w-[110px]" title={gastState?.teamName || 'Sin Definir'}>
+                  {gastState?.teamName || 'Sin Definir'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 text-[11px]">Estado:</span>
-                <span className={`font-bold uppercase text-[10px] ${gastState.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {gastState.isOpen ? 'Abierto' : 'Cerrado'}
+                <span className={`font-bold uppercase text-[10px] ${gastState?.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {gastState?.isOpen ? 'Abierto' : 'Cerrado'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500 text-[11px]">Carta:</span>
                 <span className="font-bold text-zinc-200 font-mono">
-                  {gastState.dishes.length}/4 platos
+                  {(gastState?.dishes || []).length}/4 platos
                 </span>
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                const nextOpen = !gastState.isOpen;
-                updateField('isOpen', nextOpen);
-                triggerToast(nextOpen ? '🔓 Equipo Abierto para Colaboración' : '🔒 Equipo Cerrado de forma provisional');
-              }}
-              className={`w-full py-2 rounded-lg text-center font-bold text-[11px] transition-all cursor-pointer ${
-                gastState.isOpen 
-                  ? 'bg-rose-950/50 border border-rose-900/60 text-rose-300 hover:bg-rose-900 hover:text-white'
-                  : 'bg-emerald-950/50 border border-emerald-900/60 text-emerald-300 hover:bg-emerald-900 hover:text-white'
-              }`}
-            >
-              {gastState.isOpen ? '🔒 Cerrar Equipo' : '🔓 Abrir Equipo'}
-            </button>
+            {currentProject && (
+              <button
+                onClick={() => {
+                  const nextOpen = !gastState.isOpen;
+                  updateField('isOpen', nextOpen);
+                  triggerToast(nextOpen ? '🔓 Equipo Abierto para Colaboración' : '🔒 Equipo Cerrado de forma provisional');
+                }}
+                className={`w-full py-2 rounded-lg text-center font-bold text-[11px] transition-all cursor-pointer ${
+                  gastState?.isOpen 
+                    ? 'bg-rose-950/50 border border-rose-900/60 text-rose-300 hover:bg-rose-900 hover:text-white'
+                    : 'bg-emerald-950/50 border border-emerald-900/60 text-emerald-300 hover:bg-emerald-900 hover:text-white'
+                }`}
+              >
+                {gastState?.isOpen ? '🔒 Cerrar Equipo' : '🔓 Abrir Equipo'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1025,15 +1071,19 @@ export default function AlumnoDashboard({
             </div>
           )}
 
-          <div className="flex items-center gap-3">
-            <div className="px-3 py-1 bg-zinc-100 rounded-lg border border-zinc-200 text-center text-[10px] font-bold text-zinc-600 font-mono">
+          <div 
+            onClick={() => setIsEditingStudentProfile(true)}
+            className="flex items-center gap-3 cursor-pointer group hover:bg-zinc-100 p-1 rounded-xl transition-all"
+            title="Editar Perfil"
+          >
+            <div className="px-3 py-1 bg-zinc-100 rounded-lg border border-zinc-200 text-center text-[10px] font-bold text-zinc-600 font-mono group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
               ESTUDIANTE: {currentUser.name}
             </div>
             <img 
               src={currentUser.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(currentUser.name)}`} 
               alt={currentUser.name} 
               referrerPolicy="no-referrer"
-              className="w-8 h-8 rounded-full object-cover border border-zinc-200 bg-zinc-100"
+              className="w-8 h-8 rounded-full object-cover border border-zinc-200 bg-zinc-100 group-hover:border-indigo-400 transition-colors"
             />
           </div>
         </header>
@@ -1125,8 +1175,156 @@ export default function AlumnoDashboard({
                 </div>
               </div>
 
-              {/* Two Column Layout: Main Indicators vs Sidebar Messages */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Project Assignment, Selection and Team Formation Flow */}
+              {(!currentProject || currentProject.gastronomicState?.isOpen !== false) ? (
+                <div className="space-y-6">
+                  {!currentProject ? (
+                    /* STEP 1: Student needs to choose a project from the available classroom list */
+                    <div className="bg-amber-50/50 border-2 border-dashed border-amber-300 rounded-3xl p-6 md:p-8 space-y-6 animate-in fade-in duration-300">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-600 shadow-sm">
+                          <Rocket className="h-6 w-6 animate-bounce" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <h3 className="text-base font-black text-amber-900">¡Bienvenido! Selecciona tu Proyecto de Aula</h3>
+                          <p className="text-xs text-amber-700 leading-relaxed font-medium">
+                            Tu profesor ha configurado los proyectos disponibles para tu aula (<strong className="text-amber-900 font-extrabold">{currentUser.classroom || 'Sin aula asignada'}</strong>). Elige con cuidado en cuál de ellos deseas unirte para comenzar a trabajar de forma colaborativa:
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                        {projects
+                          .filter(p => p.classroom === currentUser.classroom)
+                          .map(p => {
+                            const members = allUsers.filter(u => p.team?.includes(u.id));
+                            return (
+                              <div key={p.id} className="bg-white border border-zinc-200 rounded-2xl p-5 hover:shadow-md transition-all flex flex-col justify-between gap-4">
+                                <div className="space-y-2">
+                                  <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-zinc-200">
+                                    Proyecto de Aula ({p.classroom})
+                                  </span>
+                                  <h4 className="text-sm font-black text-zinc-950 leading-snug">{p.name}</h4>
+                                  <p className="text-xs text-zinc-500 line-clamp-3 font-medium leading-relaxed">{p.description || 'Sin descripción disponible.'}</p>
+                                </div>
+
+                                <div className="space-y-3.5 pt-3 border-t border-zinc-100">
+                                  <div>
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">Integrantes inscritos ({members.length}):</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {members.map(m => (
+                                        <div key={m.id} className="flex items-center gap-1 bg-zinc-50 border border-zinc-150 px-2 py-0.5 rounded-lg">
+                                          <img 
+                                            src={m.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(m.name)}`} 
+                                            alt={m.name} 
+                                            className="w-4.5 h-4.5 rounded-full object-cover border border-zinc-200"
+                                          />
+                                          <span className="text-[9px] font-bold text-zinc-600">{m.name}</span>
+                                        </div>
+                                      ))}
+                                      {members.length === 0 && (
+                                        <span className="text-[10px] text-zinc-400 italic">Equipo vacío, ¡sé el primero en unirte!</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => onJoinProject(p.id, currentUser.id)}
+                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    <span>Unirme a este Proyecto</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        
+                        {projects.filter(p => p.classroom === currentUser.classroom).length === 0 && (
+                          <div className="col-span-full py-8 text-center space-y-2">
+                            <div className="w-12 h-12 rounded-full bg-zinc-100 text-zinc-400 flex items-center justify-center mx-auto">
+                              <Info className="h-5 w-5" />
+                            </div>
+                            <p className="text-xs font-bold text-zinc-500">Aún no hay proyectos creados para tu aula.</p>
+                            <p className="text-[10px] text-zinc-400">Pídele a tu profesor que cree un nuevo proyecto en su panel de administración.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* STEP 2: Student has joined a project but the team is still OPEN. Wait for others and select coordinator */
+                    <div className="bg-indigo-50/50 border-2 border-dashed border-indigo-200 rounded-3xl p-6 md:p-8 space-y-6 animate-in fade-in duration-300">
+                      <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0 text-indigo-600 shadow-sm">
+                            <Users className="h-6 w-6 animate-pulse" />
+                          </div>
+                          <div className="space-y-1">
+                            <h3 className="text-base font-black text-indigo-950">Equipo en Constitución: {currentProject.name}</h3>
+                            <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                              Te has unido con éxito. Una vez que todos los integrantes del equipo estén inscritos, podéis cerrar el equipo, elegir al coordinador (Project Manager) y activar vuestro espacio de trabajo para comenzar con las tareas.
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={() => onLeaveProject(currentProject.id, currentUser.id)}
+                          className="px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 hover:border-red-300 text-red-600 hover:text-red-700 rounded-xl text-xs font-bold transition-all cursor-pointer self-start shrink-0 flex items-center gap-1.5"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Abandonar Proyecto</span>
+                        </button>
+                      </div>
+
+                      <div className="border-t border-indigo-100/50 pt-5 space-y-4">
+                        <div>
+                          <span className="text-[10px] font-bold text-indigo-950 uppercase tracking-wider block mb-2.5">Miembros actuales del equipo:</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            {allUsers
+                              .filter(u => currentProject.team?.includes(u.id))
+                              .map(u => (
+                                <div key={u.id} className="bg-white border border-indigo-100 p-3 rounded-xl flex items-center gap-3">
+                                  <img 
+                                    src={u.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.name)}`} 
+                                    alt={u.name} 
+                                    className="w-9 h-9 rounded-full object-cover border border-zinc-200"
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-zinc-800 truncate">{u.name}</p>
+                                    <p className="text-[9px] text-zinc-400 font-mono truncate">{u.email}</p>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-indigo-100/50 flex flex-col md:flex-row items-center justify-between gap-4 bg-white/40 p-4 rounded-2xl">
+                          <div className="space-y-0.5 text-center md:text-left">
+                            <p className="text-xs font-extrabold text-indigo-950">¿Listo para comenzar?</p>
+                            <p className="text-[11px] text-indigo-700/80 font-medium">Cerrar el equipo bloqueará nuevas inscripciones y asignará al líder.</p>
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              const firstMember = allUsers.find(u => currentProject.team?.includes(u.id));
+                              if (firstMember) {
+                                setSelectedCoordinatorId(firstMember.id);
+                              }
+                              setIsCloseTeamDialogOpen(true);
+                            }}
+                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-sm flex items-center gap-2"
+                          >
+                            <ShieldCheck className="h-4 w-4" />
+                            <span>Cerrar Equipo y Elegir Coordinador</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Two Column Layout: Main Indicators vs Sidebar Messages */
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Left Column: Learning Outcomes & Deliverables (2/3) */}
                 <div className="lg:col-span-2 space-y-6">
@@ -1321,6 +1519,7 @@ export default function AlumnoDashboard({
                 </div>
 
               </div>
+              )}
 
             </div>
           )}
@@ -2891,13 +3090,18 @@ export default function AlumnoDashboard({
                                     disabled={!isAssignedToMe}
                                     value={gastState.researchTexts[tarea.id] || ''}
                                     onChange={(e) => {
-                                      setGastState(prev => ({
-                                        ...prev,
+                                      const val = e.target.value;
+                                      const updated = {
+                                        ...gastState,
                                         researchTexts: {
-                                          ...prev.researchTexts,
-                                          [tarea.id]: e.target.value
+                                          ...gastState.researchTexts,
+                                          [tarea.id]: val
                                         }
-                                      }));
+                                      };
+                                      setGastState(updated);
+                                      if (currentProject) {
+                                        onUpdateProjectGastronomicState(currentProject.id, updated);
+                                      }
                                     }}
                                     className={`w-full p-4 border rounded-2xl text-xs font-semibold leading-relaxed transition-all ${
                                       isAssignedToMe 
@@ -2952,7 +3156,14 @@ export default function AlumnoDashboard({
                           type="text"
                           value={gastState.projectName || ''}
                           disabled={gastState.roles.projectManager !== currentUser.id}
-                          onChange={(e) => setGastState(prev => ({ ...prev, projectName: e.target.value }))}
+                          onChange={(e) => {
+                            const newName = e.target.value;
+                            const updated = { ...gastState, projectName: newName, restaurantName: newName };
+                            setGastState(updated);
+                            if (currentProject) {
+                              onUpdateProjectGastronomicState(currentProject.id, updated);
+                            }
+                          }}
                           className="w-full p-3 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-800 focus:border-indigo-300 transition-all"
                           placeholder="Ej: Raíces del Valle"
                         />
@@ -5811,6 +6022,137 @@ export default function AlumnoDashboard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Student Profile Edit Modal */}
+      {isEditingStudentProfile && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-zinc-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="px-6 py-5 border-b border-zinc-150 bg-zinc-50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-900 tracking-tight">Editar Perfil del Alumno</h3>
+              <button 
+                onClick={() => setIsEditingStudentProfile(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <form 
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const name = formData.get('name') as string;
+                const avatarUrl = formData.get('avatarUrl') as string;
+                if (name.trim()) {
+                  await onUpdateUserProfile(currentUser.id, name.trim(), avatarUrl.trim());
+                  setIsEditingStudentProfile(false);
+                  triggerToast('👤 ¡Perfil actualizado correctamente!');
+                }
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+                <input 
+                  type="text" 
+                  name="name" 
+                  defaultValue={currentUser.name}
+                  required
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-250 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white shadow-xs"
+                  placeholder="Ej. Alejandro Martínez"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-zinc-600 uppercase tracking-wider mb-1.5">URL de Foto (Avatar)</label>
+                <input 
+                  type="url" 
+                  name="avatarUrl" 
+                  defaultValue={currentUser.avatarUrl || ''}
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-250 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white shadow-xs"
+                  placeholder="https://ejemplo.com/foto.jpg"
+                />
+                <span className="text-[10px] text-zinc-400 mt-1 block">Deja vacío para usar una ilustración por defecto.</span>
+              </div>
+              <div className="pt-2 border-t border-zinc-100 flex items-center justify-end gap-2.5">
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditingStudentProfile(false)}
+                  className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Close Team & Select Coordinator Dialog */}
+      {currentProject && isCloseTeamDialogOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-zinc-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="px-6 py-5 border-b border-zinc-150 bg-zinc-50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-zinc-900 tracking-tight">Cerrar Equipo y Elegir Coordinador</h3>
+              <button 
+                onClick={() => setIsCloseTeamDialogOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-zinc-600 leading-relaxed font-medium">
+                Al cerrar el equipo, ya no se permitirán nuevas incorporaciones de alumnos a este proyecto. Por favor, selecciona cuál de los integrantes actuales será el <strong className="text-zinc-900 font-extrabold">Coordinador del Equipo (Project Manager)</strong>:
+              </p>
+              
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">Coordinador Seleccionado:</label>
+                <select
+                  value={selectedCoordinatorId}
+                  onChange={(e) => setSelectedCoordinatorId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-250 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white shadow-xs cursor-pointer"
+                >
+                  <option value="" disabled>Selecciona un alumno...</option>
+                  {allUsers
+                    .filter(u => currentProject.team?.includes(u.id))
+                    .map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-100 flex items-center justify-end gap-2.5">
+                <button 
+                  type="button" 
+                  onClick={() => setIsCloseTeamDialogOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button" 
+                  disabled={!selectedCoordinatorId}
+                  onClick={async () => {
+                    if (selectedCoordinatorId) {
+                      await onCloseTeam(currentProject.id, selectedCoordinatorId);
+                      setIsCloseTeamDialogOpen(false);
+                      triggerToast('🔒 ¡Equipo cerrado y coordinador elegido con éxito!');
+                    }
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl transition-colors shadow-sm cursor-pointer"
+                >
+                  Confirmar y Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

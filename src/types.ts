@@ -62,6 +62,7 @@ export interface Project {
   tasks: Task[];
   lastUpdated: string;
   classroom?: string; // Aula asignada
+  gastronomicState?: any;
 }
 
 export interface ProjectCategory {
