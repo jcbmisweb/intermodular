@@ -247,7 +247,7 @@ export default function App() {
         localStorage.setItem('studio_current_user_id_v2', matched.id);
       } else {
         // User not found, create them!
-        const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
+        const isSuperAdmin = emailLower === 'jcbprofesor@gmail.com';
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
@@ -271,6 +271,19 @@ export default function App() {
       }
     };
     
+    // TEMPORARY: Clear users collection once to start from zero
+    const clearUsers = async () => {
+        if (localStorage.getItem('cleared_users_flag')) return;
+        console.log("Clearing users collection...");
+        const snapshot = await getDocs(collection(db, 'users'));
+        for (const docSnapshot of snapshot.docs) {
+            await deleteDoc(docSnapshot.ref);
+        }
+        localStorage.setItem('cleared_users_flag', 'true');
+        console.log("Users cleared.");
+    };
+    clearUsers();
+
     syncUser();
   }, [firebaseUser, users]);
 
