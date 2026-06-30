@@ -135,17 +135,9 @@ export default function App() {
     });
 
     // B. Sync Users
-    const loadUsers = async () => {
-        const snapshot = await getDocs(collection(db, 'users'));
-        const list: AppUser[] = [];
-        snapshot.forEach(d => list.push(d.data() as AppUser));
-        setUsers(list);
-    };
-    loadUsers();
-
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const list: AppUser[] = [];
-      snapshot.forEach(d => list.push(d.data() as AppUser));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as AppUser));
       setUsers(list);
     });
 
@@ -158,7 +150,7 @@ export default function App() {
         setProjects(INITIAL_PROJECTS);
       } else {
         const list: Project[] = [];
-        snapshot.forEach(d => list.push(d.data() as Project));
+        snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as Project));
         setProjects(list);
       }
     });
@@ -166,28 +158,28 @@ export default function App() {
     // D. Sync Student Grades
     const unsubGrades = onSnapshot(collection(db, 'studentGrades'), (snapshot) => {
       const list: StudentGrade[] = [];
-      snapshot.forEach(d => list.push(d.data() as StudentGrade));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as StudentGrade));
       setStudentGrades(list);
     });
 
     // E. Sync Individual Oral Grades
     const unsubOral = onSnapshot(collection(db, 'individualOralGrades'), (snapshot) => {
       const list: IndividualOralGrade[] = [];
-      snapshot.forEach(d => list.push(d.data() as IndividualOralGrade));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as IndividualOralGrade));
       setIndividualOralGrades(list);
     });
 
     // F. Sync Announcements
     const unsubAnnouncements = onSnapshot(collection(db, 'announcements'), (snapshot) => {
       const list: Announcement[] = [];
-      snapshot.forEach(d => list.push(d.data() as Announcement));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as Announcement));
       setAnnouncements(list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     });
 
     // H. Sync Invitations
     const unsubInvitations = onSnapshot(collection(db, 'invitations'), (snapshot) => {
       const list: Invitation[] = [];
-      snapshot.forEach(d => list.push(d.data() as Invitation));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as Invitation));
       setInvitations(list);
     });
 
