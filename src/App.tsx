@@ -7,7 +7,9 @@ import {
   setDoc, 
   deleteDoc, 
   getDoc,
-  getDocs
+  getDocs,
+  query,
+  where
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from './lib/firebase';
 import { 
@@ -271,6 +273,15 @@ export default function App() {
         setActiveRole(matched.role);
         localStorage.setItem('studio_current_user_id_v2', matched.id);
       } else {
+        // Check Firestore directly to be sure
+        const q = query(collection(db, 'users'), where('email', '==', emailLower));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          // Found it in Firestore, wait for onSnapshot to update state
+          return;
+        }
+
         // User not found, let's create them!
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
