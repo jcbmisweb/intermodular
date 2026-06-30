@@ -270,7 +270,7 @@ export default function App() {
         setCurrentUser(matched);
         setActiveRole(matched.role);
         localStorage.setItem('studio_current_user_id_v2', matched.id);
-      } else if (users.length > 0) {
+      } else {
         // User not found, let's create them!
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
