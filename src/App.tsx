@@ -260,15 +260,6 @@ export default function App() {
       
       if (matched) {
         // User already in database
-        const savedSessionId = localStorage.getItem('studio_current_user_id_v2');
-        if (savedSessionId) {
-          const sessionUser = users.find(u => u.id === savedSessionId);
-          if (sessionUser) {
-            setCurrentUser(sessionUser);
-            setActiveRole(sessionUser.role);
-            return;
-          }
-        }
         setCurrentUser(matched);
         setActiveRole(matched.role);
         localStorage.setItem('studio_current_user_id_v2', matched.id);
