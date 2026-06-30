@@ -49,20 +49,6 @@ import ProfesorDashboard from './components/ProfesorDashboard';
 import AlumnoDashboard from './components/AlumnoDashboard';
 import LoginPage from './components/LoginPage';
 
-const INITIAL_USERS: AppUser[] = [
-  {
-    id: 'u-admin',
-    name: 'Juan Codina',
-    email: 'juan.codina@murciaeduca.es',
-    role: 'admin',
-    roles: ['admin', 'profesor', 'alumno'],
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-    initials: 'JC',
-    color: 'bg-emerald-600 text-white',
-    joinedAt: '2026-06-30'
-  }
-];
-
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   
@@ -149,16 +135,9 @@ export default function App() {
 
     // B. Sync Users
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      if (snapshot.empty) {
-        INITIAL_USERS.forEach(async (u) => {
-          await setDoc(doc(db, 'users', u.id), u);
-        });
-        setUsers(INITIAL_USERS);
-      } else {
-        const list: AppUser[] = [];
-        snapshot.forEach(d => list.push(d.data() as AppUser));
-        setUsers(list);
-      }
+      const list: AppUser[] = [];
+      snapshot.forEach(d => list.push(d.data() as AppUser));
+      setUsers(list);
     });
 
     // C. Sync Projects
@@ -240,39 +219,43 @@ export default function App() {
   useEffect(() => {
     const syncUser = async () => {
       if (!firebaseUser) {
-        // Offline / Simulation Fallback
-        const savedSessionId = localStorage.getItem('studio_current_user_id_v2') || 'u-admin';
+    // Offline / Simulation Fallback
+    const savedSessionId = localStorage.getItem('studio_current_user_id_v2');
+    if (savedSessionId) {
         const sessionUser = users.find(u => u.id === savedSessionId);
         if (sessionUser) {
           setCurrentUser(sessionUser);
           setActiveRole(sessionUser.role);
-        } else if (users.length > 0) {
-          setCurrentUser(users[0]);
-          setActiveRole(users[0].role);
         }
-        return;
+    }
+    return;
       }
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
       const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
       
       const matched = users.find(u => u.email.toLowerCase() === emailLower);
+      console.log('SyncUser: Checking email', emailLower, 'Matched:', matched);
       
       if (matched) {
         // User already in database
+        console.log('SyncUser: Found match in state');
         setCurrentUser(matched);
         setActiveRole(matched.role);
         localStorage.setItem('studio_current_user_id_v2', matched.id);
       } else {
         // Check Firestore directly to be sure
+        console.log('SyncUser: No match in state, checking Firestore');
         const q = query(collection(db, 'users'), where('email', '==', emailLower));
         const querySnapshot = await getDocs(q);
         
         if (!querySnapshot.empty) {
+          console.log('SyncUser: Found in Firestore, waiting for onSnapshot');
           // Found it in Firestore, wait for onSnapshot to update state
           return;
         }
 
+        console.log('SyncUser: Creating new user');
         // User not found, let's create them!
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
