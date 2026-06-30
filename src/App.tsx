@@ -218,51 +218,42 @@ export default function App() {
   // Synchronize Google authenticated firebaseUser with live application users
   useEffect(() => {
     const syncUser = async () => {
+      // If user logged out, clear local storage and current user
       if (!firebaseUser) {
-    // Offline / Simulation Fallback
-    const savedSessionId = localStorage.getItem('studio_current_user_id_v2');
-    if (savedSessionId) {
-        const sessionUser = users.find(u => u.id === savedSessionId);
-        if (sessionUser) {
-          setCurrentUser(sessionUser);
-          setActiveRole(sessionUser.role);
-        }
-    }
-    return;
+        localStorage.removeItem('studio_current_user_id_v2');
+        setCurrentUser(null);
+        setActiveRole('alumno');
+        return;
       }
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
-      const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
       
-      const matched = users.find(u => u.email.toLowerCase() === emailLower);
-      console.log('SyncUser: Checking email', emailLower, 'Matched:', matched);
+      // Try finding user in current state
+      let matched = users.find(u => u.email.toLowerCase() === emailLower);
+      
+      // If not in state, check Firestore directly
+      if (!matched) {
+        const q = query(collection(db, 'users'), where('email', '==', emailLower));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          matched = querySnapshot.docs[0].data() as AppUser;
+        }
+      }
       
       if (matched) {
-        // User already in database
-        console.log('SyncUser: Found match in state');
+        // User already exists
         setCurrentUser(matched);
         setActiveRole(matched.role);
         localStorage.setItem('studio_current_user_id_v2', matched.id);
       } else {
-        // Check Firestore directly to be sure
-        console.log('SyncUser: No match in state, checking Firestore');
-        const q = query(collection(db, 'users'), where('email', '==', emailLower));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          console.log('SyncUser: Found in Firestore, waiting for onSnapshot');
-          // Found it in Firestore, wait for onSnapshot to update state
-          return;
-        }
-
-        console.log('SyncUser: Creating new user');
-        // User not found, let's create them!
+        // User not found, create them!
+        const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
         
         const newUser: AppUser = {
-          id: isSuperAdmin ? 'u-admin' : `u-${Date.now()}`,
+          id: `u-${Date.now()}`,
           name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
           email: emailLower,
           role: isSuperAdmin ? 'admin' : 'pending',
@@ -274,6 +265,9 @@ export default function App() {
         };
         
         await setDoc(doc(db, 'users', newUser.id), newUser);
+        setCurrentUser(newUser);
+        setActiveRole(newUser.role);
+        localStorage.setItem('studio_current_user_id_v2', newUser.id);
       }
     };
     
