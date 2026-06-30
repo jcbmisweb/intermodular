@@ -350,6 +350,13 @@ export default function App() {
     await setDoc(doc(db, 'users', newUser.id), newUser);
   };
 
+  const handleRefreshUsers = async () => {
+    const snapshot = await getDocs(collection(db, 'users'));
+    const list: AppUser[] = [];
+    snapshot.forEach(d => list.push(d.data() as AppUser));
+    setUsers(list);
+  };
+
   const handleCreateClassroom = async (name: string) => {
     await setDoc(doc(db, 'classrooms', name), { name });
   };
@@ -1059,6 +1066,7 @@ export default function App() {
                 onUpdateUser={handleUpdateUser}
                 onDeleteUser={handleDeleteUser}
                 onAddUser={handleAddUser}
+                onRefreshUsers={handleRefreshUsers}
                 classrooms={classrooms}
               />
             )}

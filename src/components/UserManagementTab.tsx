@@ -13,7 +13,8 @@ import {
   Trash2,
   Mail,
   User as UserIcon,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { AppUser, UserRole } from '../types';
 
@@ -22,6 +23,7 @@ interface UserManagementTabProps {
   onUpdateUser: (updatedUser: AppUser) => void;
   onDeleteUser: (userId: string) => void;
   onAddUser: (newUser: AppUser) => void;
+  onRefreshUsers: () => void;
   classrooms: string[];
 }
 
@@ -30,6 +32,7 @@ export default function UserManagementTab({
   onUpdateUser, 
   onDeleteUser, 
   onAddUser,
+  onRefreshUsers,
   classrooms
 }: UserManagementTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -222,13 +225,22 @@ export default function UserManagementTab({
         </div>
 
         {/* Add simulation user button */}
-        <button
-          onClick={() => setIsAddingUser(!isAddingUser)}
-          className="flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Simular Login de Nuevo Usuario</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onRefreshUsers}
+            className="flex items-center justify-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0"
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Recargar Usuarios</span>
+          </button>
+          <button
+            onClick={() => setIsAddingUser(!isAddingUser)}
+            className="flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>Simular Login de Nuevo Usuario</span>
+          </button>
+        </div>
 
       </div>
 
