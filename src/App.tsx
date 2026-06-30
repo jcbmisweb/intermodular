@@ -228,7 +228,7 @@ export default function App() {
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
       
-      // Try finding user in current state
+      // Try finding user in current state (populated by onSnapshot)
       let matched = users.find(u => u.email.toLowerCase() === emailLower);
       
       // If not in state, check Firestore directly
@@ -265,25 +265,10 @@ export default function App() {
         };
         
         await setDoc(doc(db, 'users', newUser.id), newUser);
-        setCurrentUser(newUser);
-        setActiveRole(newUser.role);
-        localStorage.setItem('studio_current_user_id_v2', newUser.id);
+        // Note: onSnapshot will catch this and update state automatically
       }
     };
     
-    // TEMPORARY: Clear users collection once to start from zero
-    const clearUsers = async () => {
-        if (localStorage.getItem('cleared_users_flag')) return;
-        console.log("Clearing users collection...");
-        const snapshot = await getDocs(collection(db, 'users'));
-        for (const docSnapshot of snapshot.docs) {
-            await deleteDoc(docSnapshot.ref);
-        }
-        localStorage.setItem('cleared_users_flag', 'true');
-        console.log("Users cleared.");
-    };
-    clearUsers();
-
     syncUser();
   }, [firebaseUser, users]);
 
