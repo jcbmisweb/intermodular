@@ -88,4 +88,12 @@ export interface Announcement {
   readByStudentIds?: string[];
 }
 
+export interface Invitation {
+  id: string;
+  email: string;
+  role: UserRole;
+  classroomId?: string;
+  createdAt: string;
+}
+
 

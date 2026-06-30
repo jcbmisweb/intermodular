@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { 
   UserCheck, 
@@ -16,12 +15,14 @@ import {
   Mail,
   User as UserIcon,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Send
 } from 'lucide-react';
-import { AppUser, UserRole } from '../types';
+import { AppUser, UserRole, Invitation } from '../types';
 
 interface UserManagementTabProps {
   users: AppUser[];
+  invitations: Invitation[];
   onUpdateUser: (updatedUser: AppUser) => void;
   onDeleteUser: (userId: string) => void;
   onAddUser: (newUser: AppUser) => void;
@@ -31,6 +32,7 @@ interface UserManagementTabProps {
 
 export default function UserManagementTab({ 
   users, 
+  invitations,
   onUpdateUser, 
   onDeleteUser, 
   onAddUser,
@@ -41,6 +43,11 @@ export default function UserManagementTab({
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isAddingUser, setIsAddingUser] = useState(false);
   
+  // Invitation states
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('alumno');
+  const [inviteClassroom, setInviteClassroom] = useState('');
+
   // Form states for manual registration simulation
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -57,6 +64,25 @@ export default function UserManagementTab({
   const pendingUsersCount = users.filter(u => u.role === 'pending').length;
   const teachersCount = users.filter(u => u.role === 'profesor').length;
   const studentsCount = users.filter(u => u.role === 'alumno').length;
+
+  const handleCreateInvitation = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!inviteEmail.trim()) return;
+      await addDoc(collection(db, 'invitations'), {
+          email: inviteEmail.toLowerCase(),
+          role: inviteRole,
+          classroomId: inviteRole !== 'pending' && inviteClassroom ? inviteClassroom : null,
+          createdAt: new Date().toISOString()
+      });
+      setInviteEmail('');
+      setInviteRole('alumno');
+      setInviteClassroom('');
+      alert(`Invitación creada para ${inviteEmail}`);
+  };
+
+  const handleDeleteInvitation = async (id: string) => {
+      await deleteDoc(doc(db, 'invitations', id));
+  };
 
   // Filtered users
   const filteredUsers = users.filter(u => {
@@ -248,7 +274,7 @@ export default function UserManagementTab({
 
       {/* Manual user signup simulation form overlay */}
       {isAddingUser && (
-        <div className="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-6 shadow-xs animate-fadeIn">
+        <div className="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-6 shadow-xs animate-fadeIn mb-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-amber-900 flex items-center gap-2">
@@ -331,6 +357,85 @@ export default function UserManagementTab({
           </form>
         </div>
       )}
+
+      {/* Invitations Section */}
+      <div className="bg-sky-50/50 border border-sky-200/80 rounded-2xl p-6 shadow-xs animate-fadeIn mb-6">
+          <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-sky-900 flex items-center gap-2">
+                    <Send className="h-4 w-4 text-sky-500" />
+                    <span>Sistema de Invitaciones</span>
+                </h3>
+                <p className="text-xs text-sky-700 mt-1">
+                    Genera invitaciones para que los usuarios se registren automáticamente con el rol y aula predefinidos.
+                </p>
+              </div>
+          </div>
+
+          <form onSubmit={handleCreateInvitation} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end mb-6">
+            <div>
+              <label className="block text-[11px] font-bold text-sky-800 uppercase tracking-wider mb-1">Correo a invitar</label>
+              <input 
+                type="email"
+                placeholder="Ej. alumno@correo.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+                className="w-full px-3 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-sky-800 uppercase tracking-wider mb-1">Rol</label>
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as UserRole)}
+                className="w-full px-3 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+              >
+                <option value="alumno">✏️ Alumno</option>
+                <option value="profesor">🎓 Profesor</option>
+                <option value="admin">🔑 Administrador</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-sky-800 uppercase tracking-wider mb-1">Aula</label>
+              <select 
+                value={inviteClassroom}
+                onChange={(e) => setInviteClassroom(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer font-sans font-semibold"
+              >
+                <option value="">-- Sin Aula --</option>
+                {classrooms.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <button
+                type="submit"
+                className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition-all shrink-0"
+              >
+                Generar Invitación
+            </button>
+          </form>
+
+          <div className="border-t border-sky-200 pt-4">
+              <h4 className="text-xs font-bold text-sky-800 mb-2">Invitaciones Pendientes ({invitations.length})</h4>
+              <div className="space-y-2">
+                  {invitations.map(inv => (
+                      <div key={inv.id} className="bg-white border border-sky-100 rounded-lg p-3 flex items-center justify-between text-xs">
+                          <div>
+                              <span className="font-bold text-sky-900">{inv.email}</span>
+                              <span className="text-sky-600 mx-2">|</span>
+                              <span className="text-sky-700 capitalize">{inv.role}</span>
+                              {inv.classroomId && <span className="text-sky-700 font-bold ml-2">({inv.classroomId})</span>}
+                          </div>
+                          <button onClick={() => handleDeleteInvitation(inv.id)} className="text-red-500 hover:text-red-700">
+                              <Trash2 className="h-4 w-4" />
+                          </button>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      </div>
 
       {/* Main Table Card */}
       <div className="bg-white border border-zinc-200/80 rounded-2xl overflow-hidden shadow-xs">

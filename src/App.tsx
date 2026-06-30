@@ -34,7 +34,7 @@ import {
   LogIn,
   Target
 } from 'lucide-react';
-import { Project, TeamMember, ProjectStatus, AppUser, UserRole, AssessmentTask, StudentGrade, IndividualOralGrade, Announcement } from './types';
+import { Project, TeamMember, ProjectStatus, AppUser, UserRole, AssessmentTask, StudentGrade, IndividualOralGrade, Announcement, Invitation } from './types';
 import { INITIAL_PROJECTS, INITIAL_TEAM } from './data';
 import ProjectList from './components/ProjectList';
 import ProjectFormModal from './components/ProjectFormModal';
@@ -98,6 +98,7 @@ export default function App() {
   const [maxExpositionScore, setMaxExpositionScore] = useState<number>(3.0);
   const [maxCoevalAdjustment, setMaxCoevalAdjustment] = useState<number>(1.0);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
 
   // User Management & Active Session Simulation
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -183,6 +184,13 @@ export default function App() {
       setAnnouncements(list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     });
 
+    // H. Sync Invitations
+    const unsubInvitations = onSnapshot(collection(db, 'invitations'), (snapshot) => {
+      const list: Invitation[] = [];
+      snapshot.forEach(d => list.push(d.data() as Invitation));
+      setInvitations(list);
+    });
+
     // G. Sync Platform Configuration (IES name, logo, maximums, weights)
     const unsubConfig = onSnapshot(doc(db, 'config', 'ies'), (docSnap) => {
       if (docSnap.exists()) {
@@ -213,6 +221,7 @@ export default function App() {
       unsubGrades();
       unsubOral();
       unsubAnnouncements();
+      unsubInvitations();
       unsubConfig();
     };
   }, []);
@@ -241,10 +250,34 @@ export default function App() {
       
       // If not in state, check Firestore directly
       if (!matched) {
-        const q = query(collection(db, 'users'), where('email', '==', emailLower));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          matched = querySnapshot.docs[0].data() as AppUser;
+        // Check invitations first
+        const inv = invitations.find(i => i.email.toLowerCase() === emailLower);
+        if (inv) {
+            // Invitation found, create user
+            const newUser: AppUser = {
+              id: `u-${Date.now()}`,
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
+              email: emailLower,
+              role: inv.role,
+              roles: [inv.role],
+              avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
+              initials: firebaseUser.displayName 
+                  ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
+                  : emailLower.slice(0, 2).toUpperCase(),
+              color: inv.role === 'admin' ? 'bg-emerald-600 text-white' : 'bg-zinc-600 text-white',
+              joinedAt: new Date().toISOString().split('T')[0],
+              classroom: inv.classroomId
+            };
+            await setDoc(doc(db, 'users', newUser.id), newUser);
+            await deleteDoc(doc(db, 'invitations', inv.id));
+            matched = newUser;
+        } else {
+            // No invitation, continue with normal logic
+            const q = query(collection(db, 'users'), where('email', '==', emailLower));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              matched = querySnapshot.docs[0].data() as AppUser;
+            }
         }
       }
       
@@ -254,6 +287,7 @@ export default function App() {
         setActiveRole(matched.role);
         localStorage.setItem('studio_current_user_id_v2', matched.id);
       } else {
+        // No match and no invitation, perhaps auto-create as student? Or do nothing?
         // User not found, create them!
         const isSuperAdmin = emailLower === 'jcbprofesor@gmail.com';
         const initials = firebaseUser.displayName 
@@ -278,7 +312,7 @@ export default function App() {
     };
     
     syncUser();
-  }, [firebaseUser, users]);
+  }, [firebaseUser, users, invitations]);
 
   // Project inspect syncer
   useEffect(() => {
@@ -1048,6 +1082,7 @@ export default function App() {
             {activeTab === 'users' && (
               <UserManagementTab 
                 users={users}
+                invitations={invitations}
                 onUpdateUser={handleUpdateUser}
                 onDeleteUser={handleDeleteUser}
                 onAddUser={handleAddUser}
