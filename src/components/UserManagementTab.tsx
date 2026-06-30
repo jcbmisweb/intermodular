@@ -80,12 +80,18 @@ export default function UserManagementTab({
     ];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
+    const rolesList = newRole === 'admin' 
+      ? ['admin', 'profesor', 'alumno'] as UserRole[]
+      : newRole === 'profesor'
+        ? ['profesor'] as UserRole[]
+        : [newRole] as UserRole[];
+
     const newUser: AppUser = {
       id: `u-${Date.now()}`,
       name: newName,
       email: newEmail,
       role: newRole,
-      roles: [newRole],
+      roles: rolesList,
       avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(newName)}`,
       initials,
       color: randomColor,
@@ -110,9 +116,16 @@ export default function UserManagementTab({
   };
 
   const saveEdit = (user: AppUser) => {
+    const rolesList = editRole === 'admin' 
+      ? ['admin', 'profesor', 'alumno'] as UserRole[]
+      : editRole === 'profesor'
+        ? ['profesor'] as UserRole[]
+        : [editRole] as UserRole[];
+
     onUpdateUser({
       ...user,
       role: editRole,
+      roles: rolesList,
       classroom: editRole !== 'pending' && editClassroom.trim() ? editClassroom : undefined
     });
     setEditingUserId(null);

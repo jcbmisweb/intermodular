@@ -312,16 +312,16 @@ export default function App() {
             updatedUsersList.push(newUser);
           }
         } else {
-          // Regular new student/teacher logged in with Google
+          // Regular new student/teacher logged in with Google (placed in pending status first)
           newUser = {
             id: `u-${Date.now()}`,
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Alumno',
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
             email: firebaseUser.email || '',
-            role: 'alumno',
-            roles: ['alumno'],
+            role: 'pending',
+            roles: ['pending'],
             avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
             initials: initials,
-            color: 'bg-indigo-600 text-white',
+            color: 'bg-zinc-600 text-white',
             joinedAt: new Date().toISOString().split('T')[0]
           };
           updatedUsersList.push(newUser);
