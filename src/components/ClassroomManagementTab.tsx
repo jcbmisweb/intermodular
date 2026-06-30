@@ -19,6 +19,7 @@ interface ClassroomManagementTabProps {
   onDeleteClassroom: (name: string) => void;
   users: AppUser[];
   projects: Project[];
+  onUpdateUser: (updatedUser: AppUser) => void;
 }
 
 export default function ClassroomManagementTab({
@@ -26,7 +27,8 @@ export default function ClassroomManagementTab({
   onCreateClassroom,
   onDeleteClassroom,
   users,
-  projects
+  projects,
+  onUpdateUser
 }: ClassroomManagementTabProps) {
   const [newClassroomName, setNewClassroomName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -151,15 +153,28 @@ export default function ClassroomManagementTab({
                       <Shield className="h-3.5 w-3.5 text-zinc-300" />
                       Profesor:
                     </span>
-                    {teacher ? (
-                      <span className="text-zinc-900 font-bold flex items-center gap-1 bg-indigo-50/70 border border-indigo-100 px-2 py-0.5 rounded-lg text-[11px]">
-                        {teacher.name}
-                      </span>
-                    ) : (
-                      <span className="text-amber-500 font-semibold italic text-[11px] flex items-center gap-1">
-                        ⚠️ Sin profesor
-                      </span>
-                    )}
+                    <select
+                      value={teacher?.id || ''}
+                      onChange={(e) => {
+                        const newTeacherId = e.target.value;
+                        if (teacher) {
+                          // Remove from old teacher
+                          onUpdateUser({ ...teacher, classroom: undefined });
+                        }
+                        if (newTeacherId) {
+                          const newTeacher = users.find(u => u.id === newTeacherId);
+                          if (newTeacher) {
+                            onUpdateUser({ ...newTeacher, classroom });
+                          }
+                        }
+                      }}
+                      className="text-zinc-900 font-bold flex items-center gap-1 bg-indigo-50/70 border border-indigo-100 px-2 py-0.5 rounded-lg text-[11px] cursor-pointer"
+                    >
+                      <option value="">-- Sin asignar --</option>
+                      {users.filter(u => u.role === 'profesor').map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Student Count */}

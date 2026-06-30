@@ -1082,6 +1082,7 @@ export default function App() {
                 onDeleteClassroom={handleDeleteClassroom}
                 users={users}
                 projects={projects}
+                onUpdateUser={handleUpdateUser}
               />
             )}
 
