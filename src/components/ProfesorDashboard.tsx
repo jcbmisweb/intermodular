@@ -59,6 +59,8 @@ interface ProfesorDashboardProps {
   onUpdateOralGradeConfig: (maxTeam: number, maxExposition: number, maxCoeval: number) => void;
   announcements: Announcement[];
   onPublishAnnouncement: (text: string, authorName: string) => void;
+  activeRole?: string;
+  onChangeActiveRole?: (role: any) => void;
 }
 
 const DEFAULT_GASTRONOMIC_STATE = {
@@ -174,7 +176,9 @@ export default function ProfesorDashboard({
   maxCoevalAdjustment,
   onUpdateOralGradeConfig,
   announcements,
-  onPublishAnnouncement
+  onPublishAnnouncement,
+  activeRole,
+  onChangeActiveRole
 }: ProfesorDashboardProps) {
   // Navigation tabs: classroom (Aula e Indicadores), ra (Gestión de RA), tracking (Seguimiento), task-grading (Calificación por Tarea)
   const [activeTab, setActiveTab] = useState<string>('classroom');
@@ -432,6 +436,30 @@ export default function ProfesorDashboard({
               Gestionando el <strong className="text-zinc-700 font-bold">{assignedClassroom}</strong> con proyectos escolares activos.
             </p>
           </div>
+
+          {/* Role Switcher Buttons */}
+          {currentUser && currentUser.roles && currentUser.roles.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-2xl border border-zinc-200 shadow-xs">
+              {currentUser.roles.map((r) => {
+                const isActive = activeRole === r;
+                const label = r === 'admin' ? 'Administrador' : r === 'profesor' ? 'Profesor' : r === 'alumno' ? 'Alumno' : r;
+                const activeBg = r === 'admin' ? 'bg-emerald-600 text-white shadow-xs' : r === 'profesor' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-teal-600 text-white shadow-xs';
+                return (
+                  <button
+                    key={r}
+                    onClick={() => onChangeActiveRole && onChangeActiveRole(r)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isActive 
+                        ? `${activeBg} font-extrabold scale-102` 
+                        : 'text-zinc-600 hover:bg-zinc-200/60 hover:text-zinc-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <img 

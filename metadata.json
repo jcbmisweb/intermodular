@@ -1,6 +1,6 @@
 {
-  "name": "Remix: Manager pro Sostenible",
-  "description": "Una plataforma avanzada de gestión de proyectos y aprendizaje enfocado en sostenibilidad.",
+  "name": "Manager Pro intermodular",
+  "description": "Una plataforma avanzada de gestión de proyectos y aprendizaje intermodular.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

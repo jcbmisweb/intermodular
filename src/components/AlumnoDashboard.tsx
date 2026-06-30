@@ -186,6 +186,8 @@ interface AlumnoDashboardProps {
   announcements: Announcement[];
   onToggleReadAnnouncement: (announcementId: string) => void;
   onUpdateStudentName: (studentId: string, newName: string) => void;
+  activeRole?: string;
+  onChangeActiveRole?: (role: any) => void;
 }
 
 // Default initial state for local gastronomy project simulation
@@ -346,7 +348,9 @@ export default function AlumnoDashboard({
   maxCoevalAdjustment,
   announcements,
   onToggleReadAnnouncement,
-  onUpdateStudentName
+  onUpdateStudentName,
+  activeRole,
+  onChangeActiveRole
 }: AlumnoDashboardProps) {
   // Current active sub-tab/view inside the simulator
   const [activeMenu, setActiveMenu] = useState<string>('panel-principal');
@@ -989,13 +993,37 @@ export default function AlumnoDashboard({
             </div>
             <div>
               <h1 className="text-sm font-extrabold text-zinc-950 tracking-tight leading-none">
-                Manager pro Sostenible
+                Manager Pro intermodular
               </h1>
               <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mt-1">
                 {iesName || 'IES Sostenible'} • Portal de Aprendizaje Gastronómico
               </span>
             </div>
           </div>
+
+          {/* Role Switcher Buttons */}
+          {currentUser && currentUser.roles && currentUser.roles.length > 1 && (
+            <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-2xl border border-zinc-200 shadow-xs">
+              {currentUser.roles.map((r) => {
+                const isActive = activeRole === r;
+                const label = r === 'admin' ? 'Administrador' : r === 'profesor' ? 'Profesor' : r === 'alumno' ? 'Alumno' : r;
+                const activeBg = r === 'admin' ? 'bg-emerald-600 text-white shadow-xs' : r === 'profesor' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-teal-600 text-white shadow-xs';
+                return (
+                  <button
+                    key={r}
+                    onClick={() => onChangeActiveRole && onChangeActiveRole(r)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isActive 
+                        ? `${activeBg} font-extrabold scale-102` 
+                        : 'text-zinc-600 hover:bg-zinc-200/60 hover:text-zinc-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <div className="px-3 py-1 bg-zinc-100 rounded-lg border border-zinc-200 text-center text-[10px] font-bold text-zinc-600 font-mono">
@@ -5208,7 +5236,7 @@ export default function AlumnoDashboard({
                   
                   {/* Cabecera Oficial */}
                   {renderIESHeader(
-                    'Manager Pro Sostenible',
+                    'Manager Pro intermodular',
                     showDocType === 'tarea1' ? 'Acta de Constitución del Proyecto' : 
                     showDocType === 'tarea2' ? 'Tarea 2: Informe de Análisis e Investigación' :
                     showDocType === 'coevaluacion' ? 'Informe Confidencial de Coevaluación' :
@@ -5773,7 +5801,7 @@ export default function AlumnoDashboard({
 
                   {/* Pie de Página */}
                   <div className="mt-20 pt-6 border-t border-zinc-200 flex justify-between items-center text-[9px] font-bold text-zinc-400">
-                    <p>Manager Pro Sostenible - {showDocType === 'tarea1' ? 'Fase 0: Constitución' : 'Fase 1: Informe de Análisis'}</p>
+                    <p>Manager Pro intermodular - {showDocType === 'tarea1' ? 'Fase 0: Constitución' : 'Fase 1: Informe de Análisis'}</p>
                     <p>Fecha de generación: {new Date().toLocaleDateString('es-ES')}</p>
                   </div>
 

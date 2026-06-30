@@ -78,7 +78,7 @@ export default function PendingSpace({
             <Clock className="h-4.5 w-4.5 animate-spin" style={{ animationDuration: '3s' }} />
           </div>
           <div>
-            <span className="font-bold text-sm tracking-tight text-zinc-900 block">Manager pro Sostenible</span>
+            <span className="font-bold text-sm tracking-tight text-zinc-900 block">Manager Pro intermodular</span>
             <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider block">Espacio de Espera</span>
           </div>
         </div>
@@ -272,7 +272,7 @@ export default function PendingSpace({
       {/* Footer */}
       <footer className="bg-white border-t border-zinc-150 py-4 text-center">
         <p className="text-[11px] text-zinc-400 font-medium">
-          Manager pro Sostenible © 2026 • Plataforma Educativa Integrada
+          Manager Pro intermodular © 2026 • Plataforma Educativa Integrada
         </p>
       </footer>
 

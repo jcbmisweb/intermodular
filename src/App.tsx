@@ -391,6 +391,13 @@ export default function App() {
     }
   };
 
+  const handleChangeRole = (newRole: UserRole) => {
+    setActiveRole(newRole);
+    if (currentUser) {
+      setCurrentUser({ ...currentUser, role: newRole });
+    }
+  };
+
   const handleUpdateUser = (updatedUser: AppUser) => {
     const updated = users.map(u => u.id === updatedUser.id ? updatedUser : u);
     saveUsers(updated);
@@ -751,6 +758,8 @@ export default function App() {
           onUpdateOralGradeConfig={handleUpdateOralGradeConfig}
           announcements={announcements}
           onPublishAnnouncement={handlePublishAnnouncement}
+          activeRole={activeRole}
+          onChangeActiveRole={handleChangeRole}
         />
       );
     }
@@ -784,6 +793,8 @@ export default function App() {
               handleUpdateUser(updatedUser);
             }
           }}
+          activeRole={activeRole}
+          onChangeActiveRole={handleChangeRole}
         />
       );
     }
@@ -805,7 +816,7 @@ export default function App() {
                 )}
               </div>
               <div>
-                <span className="font-bold text-sm tracking-tight text-zinc-900 block">Manager pro Sostenible</span>
+                <span className="font-bold text-sm tracking-tight text-zinc-900 block">Manager Pro intermodular</span>
                 <span className="text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider block">{iesName}</span>
               </div>
             </div>
@@ -946,6 +957,30 @@ export default function App() {
                 </span>
               </div>
             </div>
+
+            {/* Role Switcher Buttons */}
+            {currentUser && currentUser.roles && currentUser.roles.length > 1 && (
+              <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-2xl border border-zinc-200 shadow-xs">
+                {currentUser.roles.map((r) => {
+                  const isActive = activeRole === r;
+                  const label = r === 'admin' ? 'Administrador' : r === 'profesor' ? 'Profesor' : r === 'alumno' ? 'Alumno' : r;
+                  const activeBg = r === 'admin' ? 'bg-emerald-600 text-white shadow-xs' : r === 'profesor' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-teal-600 text-white shadow-xs';
+                  return (
+                    <button
+                      key={r}
+                      onClick={() => handleChangeRole(r as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isActive 
+                          ? `${activeBg} font-extrabold scale-102` 
+                          : 'text-zinc-600 hover:bg-zinc-200/60 hover:text-zinc-900'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Workspace metric pills */}
             <div className="flex items-center gap-2 text-xs shrink-0">

@@ -24,8 +24,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           />
         </div>
         
-        <h1 className="text-2xl font-black text-zinc-900 mb-2">Manager Pro Sostenible</h1>
-        <p className="text-zinc-500 mb-8 text-sm">Plataforma para crear tu carta sostenible.</p>
+        <h1 className="text-2xl font-black text-zinc-900 mb-2">Manager Pro intermodular</h1>
+        <p className="text-zinc-500 mb-8 text-sm">Plataforma avanzada de aprendizaje y gestión intermodular.</p>
         
         <button 
           onClick={onLogin}
