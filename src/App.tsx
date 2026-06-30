@@ -134,6 +134,14 @@ export default function App() {
     });
 
     // B. Sync Users
+    const loadUsers = async () => {
+        const snapshot = await getDocs(collection(db, 'users'));
+        const list: AppUser[] = [];
+        snapshot.forEach(d => list.push(d.data() as AppUser));
+        setUsers(list);
+    };
+    loadUsers();
+
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const list: AppUser[] = [];
       snapshot.forEach(d => list.push(d.data() as AppUser));
