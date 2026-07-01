@@ -144,7 +144,7 @@ export default function App() {
         const defaultAdmin: AppUser = {
           id: 'u-admin',
           name: 'Juan Carlos (Admin)',
-          email: 'jcbmisweb@gmail.com',
+          email: 'juan.codina@murciaeduca.es',
           role: 'admin',
           roles: ['admin', 'profesor', 'alumno'],
           avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Admin',
@@ -253,7 +253,7 @@ export default function App() {
       }
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
-      const isSuperAdmin = emailLower === 'jcbprofesor@gmail.com' || emailLower === 'jcbmisweb@gmail.com' || emailLower.includes('murciaeduca');
+      const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es' || emailLower === 'juan.codina@murcieduca.es';
       
       // Parse URL parameters for direct boarding
       const searchParams = new URLSearchParams(window.location.search);
