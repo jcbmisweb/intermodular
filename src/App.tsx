@@ -135,9 +135,26 @@ export default function App() {
     });
 
     // B. Sync Users
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const unsubUsers = onSnapshot(collection(db, 'users'), async (snapshot) => {
       const list: AppUser[] = [];
       snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as AppUser));
+      
+      const hasAdmin = list.some(u => u.id === 'u-admin' || u.role === 'admin');
+      if (!hasAdmin) {
+        const defaultAdmin: AppUser = {
+          id: 'u-admin',
+          name: 'Juan Carlos (Admin)',
+          email: 'jcbmisweb@gmail.com',
+          role: 'admin',
+          roles: ['admin', 'profesor', 'alumno'],
+          avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Admin',
+          initials: 'JC',
+          color: 'bg-emerald-600 text-white',
+          joinedAt: new Date().toISOString().split('T')[0]
+        };
+        await setDoc(doc(db, 'users', 'u-admin'), defaultAdmin);
+        list.push(defaultAdmin);
+      }
       setUsers(list);
     });
 
@@ -236,7 +253,114 @@ export default function App() {
       }
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
+      const isSuperAdmin = emailLower === 'jcbprofesor@gmail.com' || emailLower === 'jcbmisweb@gmail.com' || emailLower.includes('murciaeduca');
       
+      // Parse URL parameters for direct boarding
+      const searchParams = new URLSearchParams(window.location.search);
+      const inviteId = searchParams.get('invite');
+      const aulaCode = searchParams.get('aula');
+
+      if (inviteId) {
+        try {
+          const invSnap = await getDoc(doc(db, 'invitations', inviteId));
+          if (invSnap.exists()) {
+            const invData = invSnap.data();
+            const initials = firebaseUser.displayName 
+              ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
+              : emailLower.slice(0, 2).toUpperCase();
+            
+            // Check if user already exists in db
+            const existingQ = query(collection(db, 'users'), where('email', '==', emailLower));
+            const existingSnap = await getDocs(existingQ);
+            let userToSave: AppUser;
+            if (!existingSnap.empty) {
+              const prevUser = existingSnap.docs[0].data() as AppUser;
+              userToSave = {
+                ...prevUser,
+                role: invData.role,
+                roles: Array.from(new Set([...(prevUser.roles || []), invData.role])),
+                classroom: invData.classroomId || prevUser.classroom || ''
+              };
+            } else {
+              userToSave = {
+                id: `u-${Date.now()}`,
+                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuario Invitado',
+                email: emailLower,
+                role: invData.role,
+                roles: [invData.role],
+                avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
+                initials: initials,
+                color: invData.role === 'admin' ? 'bg-emerald-600 text-white' : 'bg-zinc-600 text-white',
+                joinedAt: new Date().toISOString().split('T')[0],
+                classroom: invData.classroomId || ''
+              };
+            }
+
+            await setDoc(doc(db, 'users', userToSave.id), userToSave);
+            await deleteDoc(doc(db, 'invitations', inviteId));
+            
+            // Clear URL params
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            setCurrentUser(userToSave);
+            setActiveRole(userToSave.role);
+            localStorage.setItem('studio_current_user_id_v2', userToSave.id);
+            return;
+          }
+        } catch (err) {
+          console.error("Error applying direct invitation link:", err);
+        }
+      } else if (aulaCode) {
+        try {
+          const cleanCode = aulaCode.trim().toUpperCase();
+          const classroomsList = classrooms.length > 0 ? classrooms : ['2HCA', '2HCB', '2HCC'];
+          const matchedClass = classroomsList.find(c => c.toUpperCase() === cleanCode);
+          if (matchedClass) {
+            const initials = firebaseUser.displayName 
+              ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
+              : emailLower.slice(0, 2).toUpperCase();
+
+            const existingQ = query(collection(db, 'users'), where('email', '==', emailLower));
+            const existingSnap = await getDocs(existingQ);
+            let userToSave: AppUser;
+            if (!existingSnap.empty) {
+              const prevUser = existingSnap.docs[0].data() as AppUser;
+              userToSave = {
+                ...prevUser,
+                role: 'alumno',
+                roles: Array.from(new Set([...(prevUser.roles || []), 'alumno'])),
+                classroom: matchedClass
+              };
+            } else {
+              userToSave = {
+                id: `u-${Date.now()}`,
+                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Estudiante',
+                email: emailLower,
+                role: 'alumno',
+                roles: ['alumno'],
+                avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
+                initials: initials,
+                color: 'bg-zinc-600 text-white',
+                joinedAt: new Date().toISOString().split('T')[0],
+                classroom: matchedClass
+              };
+            }
+
+            await setDoc(doc(db, 'users', userToSave.id), userToSave);
+            
+            // Clear URL params
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            setCurrentUser(userToSave);
+            setActiveRole('alumno');
+            localStorage.setItem('studio_current_user_id_v2', userToSave.id);
+            return;
+          }
+        } catch (err) {
+          console.error("Error joining classroom via direct link:", err);
+        }
+      }
+
       // Try finding user in current state (populated by onSnapshot)
       let matched = users.find(u => u.email.toLowerCase() === emailLower);
       
@@ -274,6 +398,18 @@ export default function App() {
       }
       
       if (matched) {
+        // If matched user exists but does not have super admin roles when they are a superadmin, upgrade them
+        if (isSuperAdmin && (!matched.roles.includes('admin') || matched.role !== 'admin')) {
+          const updatedUser = {
+            ...matched,
+            role: 'admin',
+            roles: Array.from(new Set([...(matched.roles || []), 'admin', 'profesor', 'alumno'])),
+            color: 'bg-emerald-600 text-white'
+          };
+          await setDoc(doc(db, 'users', matched.id), updatedUser);
+          matched = updatedUser;
+        }
+        
         // User already exists
         setCurrentUser(matched);
         setActiveRole(matched.role);
@@ -281,7 +417,6 @@ export default function App() {
       } else {
         // No match and no invitation, perhaps auto-create as student? Or do nothing?
         // User not found, create them!
-        const isSuperAdmin = emailLower === 'jcbprofesor@gmail.com';
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
@@ -304,7 +439,7 @@ export default function App() {
     };
     
     syncUser();
-  }, [firebaseUser, users, invitations]);
+  }, [firebaseUser, users, invitations, classrooms]);
 
   // Project inspect syncer
   useEffect(() => {
@@ -756,6 +891,19 @@ export default function App() {
           currentUser={currentUser} 
           onUpdateCurrentUser={handleUpdateUser} 
           onLogoutToAdmin={() => handleSwitchSession('u-admin')} 
+          classrooms={classrooms}
+          onJoinClassroomByCode={async (code) => {
+            if (currentUser) {
+              const updatedUser: AppUser = {
+                ...currentUser,
+                role: 'alumno',
+                roles: ['alumno'],
+                classroom: code
+              };
+              await handleUpdateUser(updatedUser);
+              setActiveRole('alumno');
+            }
+          }}
         />
       );
     }

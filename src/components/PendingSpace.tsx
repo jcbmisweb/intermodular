@@ -15,6 +15,8 @@ interface PendingSpaceProps {
   currentUser: AppUser;
   onUpdateCurrentUser: (updatedUser: AppUser) => void;
   onLogoutToAdmin: () => void;
+  classrooms?: string[];
+  onJoinClassroomByCode?: (code: string) => void;
 }
 
 const PRESET_AVATARS = [
@@ -29,12 +31,18 @@ const PRESET_AVATARS = [
 export default function PendingSpace({ 
   currentUser, 
   onUpdateCurrentUser,
-  onLogoutToAdmin
+  onLogoutToAdmin,
+  classrooms = [],
+  onJoinClassroomByCode
 }: PendingSpaceProps) {
   const [tempName, setTempName] = useState(currentUser.name);
   const [tempAvatar, setTempAvatar] = useState(currentUser.avatarUrl);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+
+  // Classroom Code states
+  const [codeEntered, setCodeEntered] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +73,24 @@ export default function PendingSpace({
       setTempAvatar(customAvatarUrl.trim());
       setCustomAvatarUrl('');
       setIsSaved(false);
+    }
+  };
+
+  const handleJoinClassroom = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCodeError('');
+    const code = codeEntered.trim().toUpperCase();
+    if (!code) {
+      setCodeError('Por favor introduce un código de aula.');
+      return;
+    }
+    const found = classrooms.some(c => c.toUpperCase() === code);
+    if (!found) {
+      setCodeError(`El código "${code}" no corresponde a ningún aula activa.`);
+      return;
+    }
+    if (onJoinClassroomByCode) {
+      onJoinClassroomByCode(code);
     }
   };
 
@@ -123,6 +149,48 @@ export default function PendingSpace({
                   Para poder navegar y usar los espacios interactivos de la academia, un Administrador debe asignarte tu perfil correspondiente (<strong className="font-bold">Profesor</strong> o <strong className="font-bold">Alumno</strong>) y tu <strong className="font-bold">Aula de estudios</strong>.
                 </span>
               </div>
+            </div>
+
+            {/* Classroom Code Form box */}
+            <div className="p-5 bg-sky-50/70 border border-sky-150 rounded-2xl space-y-3">
+              <h4 className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-sky-500 animate-pulse" />
+                <span>¿Tienes un Código de Aula de tu Profesor?</span>
+              </h4>
+              <p className="text-[11px] text-sky-700 leading-relaxed">
+                Si tu profesor te ha facilitado un código (ej. 2HCA), introdúcelo aquí para unirte automáticamente como Alumno a su aula y empezar a trabajar de inmediato:
+              </p>
+              <form onSubmit={handleJoinClassroom} className="flex gap-2">
+                <div className="flex-1 min-w-0">
+                  <input 
+                    type="text"
+                    placeholder="Ej. 2HCA"
+                    value={codeEntered}
+                    onChange={(e) => {
+                      setCodeEntered(e.target.value);
+                      setCodeError('');
+                    }}
+                    className="w-full px-3.5 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-sm"
+                >
+                  <span>Unirse</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </form>
+              {codeError && (
+                <p className="text-[10px] text-red-600 font-bold flex items-center gap-1">
+                  <span>⚠️ {codeError}</span>
+                </p>
+              )}
+              {classrooms.length > 0 && (
+                <div className="text-[10px] text-sky-600 mt-1">
+                  Aulas activas: <span className="font-bold font-mono">{classrooms.join(', ')}</span>
+                </div>
+              )}
             </div>
           </div>
 

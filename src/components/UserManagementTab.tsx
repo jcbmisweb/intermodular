@@ -17,7 +17,9 @@ import {
   User as UserIcon,
   Sparkles,
   RefreshCw,
-  Send
+  Send,
+  Copy,
+  Link
 } from 'lucide-react';
 import { AppUser, UserRole, Invitation } from '../types';
 
@@ -48,6 +50,7 @@ export default function UserManagementTab({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('alumno');
   const [inviteClassroom, setInviteClassroom] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Form states for manual registration simulation
   const [newName, setNewName] = useState('');
@@ -421,19 +424,91 @@ export default function UserManagementTab({
           <div className="border-t border-sky-200 pt-4">
               <h4 className="text-xs font-bold text-sky-800 mb-2">Invitaciones Pendientes ({invitations.length})</h4>
               <div className="space-y-2">
-                  {invitations.map(inv => (
-                      <div key={inv.id} className="bg-white border border-sky-100 rounded-lg p-3 flex items-center justify-between text-xs">
-                          <div>
-                              <span className="font-bold text-sky-900">{inv.email}</span>
-                              <span className="text-sky-600 mx-2">|</span>
-                              <span className="text-sky-700 capitalize">{inv.role}</span>
-                              {inv.classroomId && <span className="text-sky-700 font-bold ml-2">({inv.classroomId})</span>}
+                  {invitations.map(inv => {
+                      const link = `${window.location.origin}?invite=${inv.id}`;
+                      const isCopied = copiedId === inv.id;
+                      return (
+                          <div key={inv.id} className="bg-white border border-sky-100 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                              <div>
+                                  <span className="font-bold text-sky-900">{inv.email}</span>
+                                  <span className="text-sky-600 mx-2 hidden sm:inline">|</span>
+                                  <span className="text-sky-700 capitalize font-medium">{inv.role}</span>
+                                  {inv.classroomId && <span className="text-sky-700 font-bold ml-2">({inv.classroomId})</span>}
+                                  <span className="text-[10px] text-zinc-400 block font-mono truncate max-w-xs sm:max-w-md mt-0.5" title={link}>
+                                      {link}
+                                  </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                  <button 
+                                      onClick={() => {
+                                          navigator.clipboard.writeText(link);
+                                          setCopiedId(inv.id);
+                                          setTimeout(() => setCopiedId(null), 2000);
+                                      }}
+                                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                                          isCopied 
+                                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900'
+                                      }`}
+                                      title="Copiar enlace de invitación"
+                                  >
+                                      {isCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                      <span>{isCopied ? 'Copiado' : 'Copiar Enlace'}</span>
+                                  </button>
+                                  <button 
+                                      onClick={() => handleDeleteInvitation(inv.id)} 
+                                      className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Eliminar invitación"
+                                  >
+                                      <Trash2 className="h-4 w-4" />
+                                  </button>
+                              </div>
                           </div>
-                          <button onClick={() => handleDeleteInvitation(inv.id)} className="text-red-500 hover:text-red-700">
-                              <Trash2 className="h-4 w-4" />
-                          </button>
-                      </div>
-                  ))}
+                      );
+                  })}
+              </div>
+
+              {/* Fast Classroom Links */}
+              <div className="mt-5 pt-4 border-t border-sky-200/60">
+                  <h4 className="text-xs font-bold text-sky-800 mb-2 flex items-center gap-1.5">
+                      <Link className="h-3.5 w-3.5 text-sky-500" />
+                      <span>Enlaces de Registro Directo para Alumnos (Moodle / Correo)</span>
+                  </h4>
+                  <p className="text-[11px] text-sky-700 mb-3">
+                      Copia estos enlaces para publicarlos en tu aula Moodle o enviarlos por correo masivo. Cualquier alumno que acceda mediante estos enlaces será asignado automáticamente con el rol de <strong className="font-bold">Alumno</strong> en el aula correspondiente.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {classrooms.map(c => {
+                          const link = `${window.location.origin}?aula=${c}`;
+                          const isCopied = copiedId === `aula-${c}`;
+                          return (
+                              <div key={c} className="bg-white border border-sky-100 rounded-xl p-3 flex items-center justify-between text-xs shadow-xs">
+                                  <div className="min-w-0 flex-1 mr-2">
+                                      <span className="font-extrabold text-zinc-800 flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                          <span>Aula {c}</span>
+                                      </span>
+                                      <span className="text-[10px] text-zinc-400 font-mono block truncate mt-0.5" title={link}>{link}</span>
+                                  </div>
+                                  <button 
+                                      onClick={() => {
+                                          navigator.clipboard.writeText(link);
+                                          setCopiedId(`aula-${c}`);
+                                          setTimeout(() => setCopiedId(null), 2000);
+                                      }}
+                                      className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                                          isCopied 
+                                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                                              : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-700'
+                                      }`}
+                                  >
+                                      {isCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                      <span>{isCopied ? '¡Copiado!' : 'Copiar'}</span>
+                                  </button>
+                              </div>
+                          );
+                      })}
+                  </div>
               </div>
           </div>
       </div>
