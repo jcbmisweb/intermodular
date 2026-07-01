@@ -158,28 +158,28 @@ export default function App() {
     // D. Sync Student Grades
     const unsubGrades = onSnapshot(collection(db, 'studentGrades'), (snapshot) => {
       const list: StudentGrade[] = [];
-      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as StudentGrade));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as any));
       setStudentGrades(list);
     });
 
     // E. Sync Individual Oral Grades
     const unsubOral = onSnapshot(collection(db, 'individualOralGrades'), (snapshot) => {
       const list: IndividualOralGrade[] = [];
-      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as IndividualOralGrade));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as any));
       setIndividualOralGrades(list);
     });
 
     // F. Sync Announcements
     const unsubAnnouncements = onSnapshot(collection(db, 'announcements'), (snapshot) => {
       const list: Announcement[] = [];
-      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as Announcement));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as any));
       setAnnouncements(list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     });
 
     // H. Sync Invitations
     const unsubInvitations = onSnapshot(collection(db, 'invitations'), (snapshot) => {
       const list: Invitation[] = [];
-      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as Invitation));
+      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as any));
       setInvitations(list);
     });
 
@@ -693,7 +693,7 @@ export default function App() {
   const handleResetWorkspace = () => {
     setProjects(INITIAL_PROJECTS);
     setTeam(INITIAL_TEAM);
-    setUsers(INITIAL_USERS);
+    setUsers([]);
     setClassrooms(['2HCA', '2HCB', '2HCC']);
     setIesName('IES Sostenible');
     setIesLogo('');
@@ -702,7 +702,7 @@ export default function App() {
     setAnnouncements([]);
     localStorage.setItem('studio_projects_v2', JSON.stringify(INITIAL_PROJECTS));
     localStorage.setItem('studio_team_v2', JSON.stringify(INITIAL_TEAM));
-    localStorage.setItem('studio_users_v2', JSON.stringify(INITIAL_USERS));
+    localStorage.setItem('studio_users_v2', JSON.stringify([]));
     localStorage.setItem('studio_classrooms_v2', JSON.stringify(['2HCA', '2HCB', '2HCC']));
     localStorage.setItem('studio_ies_name_v2', 'IES Sostenible');
     localStorage.setItem('studio_ies_logo_v2', '');
