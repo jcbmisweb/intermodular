@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { db } from '../lib/firebase';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { 
   Building2, 
   Users, 
@@ -249,6 +251,118 @@ export default function ProfesorDashboard({
 
   // Projects assigned to this classroom
   const classroomProjects = projects.filter(p => p.classroom === assignedClassroom);
+
+  // Local state for Quick Project Generator
+  const [numProjectsToCreate, setNumProjectsToCreate] = useState<number>(5);
+  const [creationCategory, setCreationCategory] = useState<string>('Gastronomía Sostenible');
+  const [creationDueDate, setCreationDueDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 3);
+    return d.toISOString().split('T')[0];
+  });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationSuccess, setGenerationSuccess] = useState(false);
+
+  // Automatically sync default number of projects to the number of students
+  React.useEffect(() => {
+    if (classroomStudents.length > 0) {
+      setNumProjectsToCreate(classroomStudents.length);
+    }
+  }, [classroomStudents.length]);
+
+  const handleGenerateGenericProjects = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (numProjectsToCreate < 1) return;
+    setIsGenerating(true);
+    setGenerationSuccess(false);
+
+    try {
+      const initialTasks = assessmentTasks.map(at => ({
+        id: at.id,
+        title: at.title,
+        completed: false
+      }));
+
+      for (let i = 1; i <= numProjectsToCreate; i++) {
+        const projectId = `proj_${assignedClassroom.replace(/\s+/g, '_')}_${Date.now()}_${i}`;
+        const projectName = `Proyecto Intermodular Nº ${i}`;
+        
+        const initialGastState = {
+          restaurantName: projectName,
+          projectName: projectName,
+          conceptDescription: 'Proyecto genérico creado por el tutor. Únete a este proyecto con tus compañeros y cámbiale el nombre.',
+          isOpen: true,
+          modoEdicion: true,
+          roles: {
+            projectManager: '',
+            marketingDirector: '',
+            operationsManager: '',
+            financialOfficer: '',
+            chef: ''
+          },
+          dishes: [],
+          swot: { fortalezas: '', debilidades: '', oportunidades: '', amenazas: '' },
+          viability: { fixedCosts: 3000, variableCostPercent: 30, expectedCustomers: 500, averageTicket: 25 },
+          zeroWasteChecklist: [
+            { id: 'zw1', text: 'Separación selectiva y pesaje de mermas orgánicas diario.', checked: false },
+            { id: 'zw2', text: 'Uso de compostadora para residuos vegetales del huerto del IES.', checked: false },
+            { id: 'zw3', text: 'Acuerdos de donación de excedentes alimentarios.', checked: false }
+          ],
+          prototypes: [],
+          dishesEvaluations: {},
+          finalNotes: '',
+          isSubmitted: false
+        };
+
+        const newProject = {
+          id: projectId,
+          name: projectName,
+          description: 'Proyecto genérico creado por el tutor. Únete a este proyecto con tus compañeros y cámbiale el nombre.',
+          status: 'planning',
+          priority: 'medium',
+          category: creationCategory,
+          budget: 0,
+          spent: 0,
+          startDate: new Date().toISOString().split('T')[0],
+          dueDate: creationDueDate,
+          progress: 0,
+          team: [],
+          tasks: initialTasks,
+          lastUpdated: new Date().toISOString(),
+          classroom: assignedClassroom,
+          gastronomicState: initialGastState
+        };
+
+        await setDoc(doc(db, 'projects', projectId), newProject);
+      }
+
+      setGenerationSuccess(true);
+      setTimeout(() => setGenerationSuccess(false), 5000);
+    } catch (error) {
+      console.error("Error generating projects:", error);
+      alert("Hubo un error al generar los proyectos.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleClearClassroomProjects = async () => {
+    const confirmClear = window.confirm(`¿Estás seguro de que deseas eliminar TODOS los proyectos de la clase "${assignedClassroom}"? Esta acción no se puede deshacer.`);
+    if (!confirmClear) return;
+
+    try {
+      setIsGenerating(true);
+      for (const p of classroomProjects) {
+        await deleteDoc(doc(db, 'projects', p.id));
+      }
+      alert("Todos los proyectos de esta aula han sido eliminados correctamente.");
+    } catch (error) {
+      console.error("Error clearing classroom projects:", error);
+      alert("Hubo un error al vaciar los proyectos.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handlePostAnnouncement = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1192,6 +1306,110 @@ export default function ProfesorDashboard({
               {/* Left Col: Projects & Assignments */}
               <div className="lg:col-span-2 space-y-6">
                 
+                {/* ESPACIO DE CREADOR DE PROYECTOS */}
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-150 rounded-2xl p-6 shadow-xs space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <h2 className="text-sm font-black text-indigo-950 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-indigo-600 animate-pulse" />
+                        <span>Espacio del Creador de Proyectos</span>
+                      </h2>
+                      <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
+                        Genera automáticamente proyectos genéricos en lote para que los alumnos de esta aula puedan seleccionarlos, unirse en equipo, y renombrarlos a su gusto posteriormente.
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md text-[9px] font-black uppercase tracking-wider">
+                      Herramienta Docente
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleGenerateGenericProjects} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end bg-white border border-indigo-100 rounded-xl p-4 shadow-2xs">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                        Nº de Proyectos a Crear
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="1"
+                          max="40"
+                          value={numProjectsToCreate}
+                          onChange={(e) => setNumProjectsToCreate(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                          required
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-zinc-400">
+                          alumnos: {classroomStudents.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                        Categoría Inicial
+                      </label>
+                      <select
+                        value={creationCategory}
+                        onChange={(e) => setCreationCategory(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs text-zinc-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        <option value="Gastronomía Sostenible">🍳 Gastronomía Sostenible</option>
+                        <option value="Servicio y Sumillería">🍷 Servicio y Sumillería</option>
+                        <option value="Cocina Km 0">🌱 Cocina Km 0</option>
+                        <option value="Intermodular">📚 Intermodular</option>
+                        <option value="Gestión de Eventos">🎉 Gestión de Eventos</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                        Fecha Límite Entrega
+                      </label>
+                      <input
+                        type="date"
+                        value={creationDueDate}
+                        onChange={(e) => setCreationDueDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs text-zinc-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3 flex items-center justify-between gap-3 pt-2 border-t border-zinc-100">
+                      <p className="text-[10px] text-zinc-400 font-medium italic">
+                        * Se generarán con nombres como "Proyecto Intermodular Nº 1", etc.
+                      </p>
+                      
+                      <div className="flex items-center gap-2">
+                        {classroomProjects.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearClassroomProjects}
+                            className="px-3 py-2 border border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Vaciar Aula</span>
+                          </button>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={isGenerating}
+                          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-extrabold text-xs px-4 py-2 rounded-lg cursor-pointer transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>{isGenerating ? 'Creando...' : 'Generar Proyectos'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  {generationSuccess && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] px-4 py-2 rounded-xl font-bold flex items-center gap-2 animate-bounce">
+                      <Check className="h-4 w-4 text-emerald-600" />
+                      <span>¡Los proyectos se han creado exitosamente! Los alumnos ya los tienen disponibles en su panel.</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Classroom Projects Card */}
                 <div className="bg-white border border-zinc-200/80 rounded-2xl p-6 shadow-xs space-y-4">
                   <div className="flex items-center justify-between">

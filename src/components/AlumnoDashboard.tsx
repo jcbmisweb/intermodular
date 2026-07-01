@@ -613,6 +613,92 @@ export default function AlumnoDashboard({
     }
   };
 
+  // State & Handlers for Quick Project Management (Rename & Custom Team Tasks)
+  const [customProjectName, setCustomProjectName] = useState('');
+  const [customTaskTitle, setCustomTaskTitle] = useState('');
+
+  useEffect(() => {
+    if (currentProject) {
+      setCustomProjectName(currentProject.name);
+    }
+  }, [currentProject?.name]);
+
+  const handleRenameProjectDirectly = async (newName: string) => {
+    if (!currentProject || !newName.trim()) return;
+    
+    // Update gastronomicState
+    const updatedGastState = {
+      ...gastState,
+      projectName: newName.trim(),
+      restaurantName: newName.trim()
+    };
+    setGastState(updatedGastState);
+    
+    // Save gastronomic state
+    onUpdateProjectGastronomicState(currentProject.id, updatedGastState);
+    
+    // Explicitly update project doc
+    await updateDoc(doc(db, 'projects', currentProject.id), {
+      name: newName.trim(),
+      lastUpdated: new Date().toISOString()
+    });
+    
+    triggerToast('✏️ Nombre del proyecto actualizado.');
+  };
+
+  const handleAddCustomTaskDirectly = async () => {
+    if (!currentProject || !customTaskTitle.trim()) return;
+    const newTask = {
+      id: `custom_${Date.now()}`,
+      title: customTaskTitle.trim(),
+      completed: false,
+      assignedTo: ''
+    };
+    
+    const updatedTasks = [...(currentProject.tasks || []), newTask];
+    const completedCount = updatedTasks.filter(t => t.completed).length;
+    const progress = updatedTasks.length > 0
+      ? Math.round((completedCount / updatedTasks.length) * 100)
+      : currentProject.progress;
+      
+    await updateDoc(doc(db, 'projects', currentProject.id), {
+      tasks: updatedTasks,
+      progress,
+      lastUpdated: new Date().toISOString()
+    });
+    
+    setCustomTaskTitle('');
+    triggerToast('✅ Tarea de equipo añadida.');
+  };
+
+  const handleDeleteCustomTaskDirectly = async (taskId: string) => {
+    if (!currentProject) return;
+    const updatedTasks = (currentProject.tasks || []).filter(t => t.id !== taskId);
+    const completedCount = updatedTasks.filter(t => t.completed).length;
+    const progress = updatedTasks.length > 0
+      ? Math.round((completedCount / updatedTasks.length) * 100)
+      : 0;
+      
+    await updateDoc(doc(db, 'projects', currentProject.id), {
+      tasks: updatedTasks,
+      progress,
+      lastUpdated: new Date().toISOString()
+    });
+    triggerToast('🗑️ Tarea eliminada.');
+  };
+
+  const handleAssignTaskDirectly = async (taskId: string, userId: string) => {
+    if (!currentProject) return;
+    const updatedTasks = (currentProject.tasks || []).map(t =>
+      t.id === taskId ? { ...t, assignedTo: userId } : t
+    );
+    await updateDoc(doc(db, 'projects', currentProject.id), {
+      tasks: updatedTasks,
+      lastUpdated: new Date().toISOString()
+    });
+    triggerToast('👤 Tarea asignada.');
+  };
+
   // Add a new dish to Menu Design
   const [newDish, setNewDish] = useState({
     name: '',
@@ -1120,6 +1206,177 @@ export default function AlumnoDashboard({
                   </div>
                 </div>
               </div>
+
+              {/* Espacio de Gestión Rápida del Proyecto (Sólo visible una vez unido a un proyecto) */}
+              {currentProject && (
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-150 rounded-3xl p-6 shadow-xs space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                          <Sparkles className="h-4 w-4 text-emerald-600 animate-pulse" />
+                        </span>
+                        <h2 className="text-xs font-black text-emerald-950 uppercase tracking-widest">
+                          Espacio de Gestión Rápida del Proyecto
+                        </h2>
+                      </div>
+                      <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
+                        Personaliza el nombre genérico asignado por tu profesor, añade tareas de equipo, y distribuye el trabajo en tiempo real.
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1.5 bg-white border border-emerald-200 px-3 py-1 rounded-xl shadow-2xs">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-wide">
+                        Proyecto Vinculado
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                    {/* Rename Project Section */}
+                    <div className="md:col-span-5 bg-white border border-emerald-100 rounded-2xl p-5 space-y-4 shadow-3xs">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                          Nombre Personalizado del Proyecto
+                        </label>
+                        <p className="text-[10px] text-zinc-500 italic">
+                          Cambia el nombre genérico por uno representativo de tu equipo.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={customProjectName}
+                          onChange={(e) => setCustomProjectName(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                          placeholder="Ej: El Rinconcito Sostenible"
+                        />
+                        <button
+                          onClick={() => handleRenameProjectDirectly(customProjectName)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-all shrink-0 flex items-center gap-1 shadow-sm hover:shadow-md"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Guardar</span>
+                        </button>
+                      </div>
+                      
+                      <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-150 space-y-1 text-[10px] text-zinc-600">
+                        <p><strong>ID del Proyecto:</strong> <code className="font-mono bg-zinc-200/60 px-1 py-0.5 rounded text-zinc-700">{currentProject.id}</code></p>
+                        <p><strong>Nombre en DB:</strong> <span className="font-bold text-zinc-800">{currentProject.name}</span></p>
+                      </div>
+                    </div>
+
+                    {/* Task Manager Section */}
+                    <div className="md:col-span-7 bg-white border border-emerald-100 rounded-2xl p-5 space-y-4 shadow-3xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                            Gestión de Tareas Específicas
+                          </label>
+                          <p className="text-[10px] text-zinc-500">
+                            Organiza y asigna las tareas de tu equipo.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-black text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded">
+                            Progreso: {currentProject.progress || 0}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Add Custom Task Form */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={customTaskTitle}
+                          onChange={(e) => setCustomTaskTitle(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                          placeholder="Añadir tarea de equipo..."
+                        />
+                        <button
+                          onClick={handleAddCustomTaskDirectly}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-all shrink-0 flex items-center gap-1 shadow-sm hover:shadow-md"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Añadir</span>
+                        </button>
+                      </div>
+
+                      {/* Tasks List */}
+                      <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 border border-zinc-100 p-2 rounded-xl bg-zinc-50/50">
+                        {(currentProject.tasks || []).map((task) => {
+                          const isCustom = task.id.startsWith('custom_');
+                          const projectTeamUsers = allUsers.filter(u => currentProject.team?.includes(u.id));
+
+                          return (
+                            <div
+                              key={task.id}
+                              className="bg-white border border-zinc-150 p-2 rounded-xl flex items-center justify-between gap-3 hover:shadow-2xs transition-all animate-in fade-in duration-200"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={task.completed}
+                                  onChange={() => onToggleTask(currentProject.id, task.id)}
+                                  className="w-4 h-4 text-emerald-600 border-zinc-300 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <p className={`text-xs font-bold leading-tight ${task.completed ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
+                                    {task.title}
+                                  </p>
+                                  {isCustom ? (
+                                    <span className="text-[8px] font-black uppercase text-indigo-500 tracking-wider bg-indigo-50 px-1 py-0.2 rounded mt-0.5 inline-block">
+                                      Personalizada
+                                    </span>
+                                  ) : (
+                                    <span className="text-[8px] font-black uppercase text-zinc-400 tracking-wider bg-zinc-100 px-1 py-0.2 rounded mt-0.5 inline-block">
+                                      Fase Oficial
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* Assignment select */}
+                                <select
+                                  value={task.assignedTo || ''}
+                                  onChange={(e) => handleAssignTaskDirectly(task.id, e.target.value)}
+                                  className="px-2 py-1 bg-zinc-50 border border-zinc-200 rounded-lg text-[9px] text-zinc-600 font-bold cursor-pointer max-w-[100px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                >
+                                  <option value="">👤 Sin asignar</option>
+                                  {projectTeamUsers.map((member) => (
+                                    <option key={member.id} value={member.id}>
+                                      👤 {member.name.split(' ')[0]}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {/* Delete Custom Task Button */}
+                                {isCustom && (
+                                  <button
+                                    onClick={() => handleDeleteCustomTaskDirectly(task.id)}
+                                    className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer"
+                                    title="Eliminar tarea personalizada"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {(currentProject.tasks || []).length === 0 && (
+                          <div className="text-center py-6 text-[10px] text-zinc-400 italic">
+                            No hay tareas en este proyecto.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Project Assignment, Selection and Team Formation Flow */}
               {(!currentProject || currentProject.gastronomicState?.isOpen !== false) ? (

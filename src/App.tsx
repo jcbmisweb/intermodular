@@ -259,10 +259,106 @@ export default function App() {
     // C. Sync Projects
     const unsubProjects = onSnapshot(collection(db, 'projects'), (snapshot) => {
       if (snapshot.empty) {
-        INITIAL_PROJECTS.forEach(async (p) => {
+        const initialTasks = [
+          { id: 'step-11', title: '1. Entregable Tarea 1', completed: false },
+          { id: 'step-12', title: '2. Entregable Tarea 2', completed: false },
+          { id: 'step-13', title: '3. Entregable Tarea 3', completed: false },
+          { id: 'step-14', title: '4. Entregable Tarea 4', completed: false },
+          { id: 'step-15', title: '5. Entregable Tarea 5', completed: false },
+          { id: 'step-16', title: '6. Informe Coevaluación', completed: false },
+          { id: 'step-17', title: '7. Memoria Final del Proyecto', completed: false },
+        ];
+
+        const defaultProjects: Project[] = [];
+        ['2HCA', '2HCB', '2HCC'].forEach((classroom) => {
+          for (let i = 1; i <= 5; i++) {
+            const id = `proj_${classroom}_${i}`;
+            const name = `Proyecto Intermodular Nº ${i}`;
+            const initialGastState = {
+              restaurantName: name,
+              projectName: name,
+              conceptDescription: 'Proyecto genérico creado por el profesor. Únete a este proyecto con tu equipo y cámbiale el nombre.',
+              isOpen: true,
+              modoEdicion: true,
+              roles: {
+                projectManager: '',
+                fbDirector: '',
+                sustainabilityManager: '',
+                marketingDirector: '',
+                financialDirector: ''
+              },
+              decisionGrupal: {
+                logo: '',
+                slogan: '',
+                publicoObjetivo: '',
+                valores: []
+              },
+              swot: { fortalezas: '', debilidades: '', oportunidades: '', amenazas: '' },
+              viability: { fixedCosts: 4500, variableCostPercent: 28, expectedCustomers: 650, averageTicket: 35 },
+              zeroWasteChecklist: [
+                { id: 'zw1', text: 'Separación selectiva y pesaje de mermas orgánicas diario.', checked: false },
+                { id: 'zw2', text: 'Uso de compostadora para residuos vegetales del huerto del IES.', checked: false },
+                { id: 'zw3', text: 'Acuerdos de donación de excedentes alimentarios.', checked: false }
+              ],
+              task4: {
+                visualIdentity: '',
+                digitalLink: '',
+                qrImage: '',
+                physicalImage: '',
+                physicalDescription: '',
+                activeTab: 'instrucciones'
+              },
+              task5: {
+                activeTab: 'redactar',
+                contextAndJustification: '',
+                researchSynthesis: '',
+                restaurantObjectives: '',
+                valueProposition: '',
+                gastronomicExplanation: '',
+                workMethodology: '',
+                timePlanning: '',
+                odsRelationship: '',
+                finalValuation: '',
+                bibliography: ''
+              },
+              task8: {
+                activeTab: 'instrucciones',
+                presentations: [],
+                prototypePhotoUrl: '',
+                missions: {
+                  designers: [],
+                  artisans: [],
+                  editors: []
+                }
+              }
+            };
+
+            const p: Project = {
+              id,
+              name,
+              description: 'Proyecto genérico de salida. Únete a este proyecto con tu equipo para empezar.',
+              status: 'planning',
+              priority: 'medium',
+              category: 'Gastronomía Sostenible',
+              budget: 0,
+              spent: 0,
+              startDate: new Date().toISOString().split('T')[0],
+              dueDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 months
+              progress: 0,
+              team: [],
+              tasks: initialTasks,
+              lastUpdated: new Date().toISOString(),
+              classroom,
+              gastronomicState: initialGastState
+            };
+            defaultProjects.push(p);
+          }
+        });
+
+        defaultProjects.forEach(async (p) => {
           await setDoc(doc(db, 'projects', p.id), p);
         });
-        setProjects(INITIAL_PROJECTS);
+        setProjects(defaultProjects);
       } else {
         const list: Project[] = [];
         snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as Project));
@@ -890,6 +986,7 @@ export default function App() {
     if (project) {
       await setDoc(doc(db, 'projects', projectId), {
         ...project,
+        name: gastronomicState.projectName || gastronomicState.restaurantName || project.name,
         gastronomicState,
         lastUpdated: new Date().toISOString()
       });
