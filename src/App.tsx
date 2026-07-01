@@ -34,7 +34,7 @@ import {
   LogIn,
   Target
 } from 'lucide-react';
-import { Project, TeamMember, ProjectStatus, AppUser, UserRole, AssessmentTask, StudentGrade, IndividualOralGrade, Announcement, Invitation } from './types';
+import { Project, TeamMember, ProjectStatus, AppUser, UserRole, AssessmentTask, StudentGrade, IndividualOralGrade, Announcement, RegistrationCode } from './types';
 import { INITIAL_PROJECTS, INITIAL_TEAM } from './data';
 import ProjectList from './components/ProjectList';
 import ProjectFormModal from './components/ProjectFormModal';
@@ -93,34 +93,19 @@ export default function App() {
     }
 
     const cleanCode = code.trim().toUpperCase();
-    const aulasList = classrooms.length > 0 ? classrooms : ['2HCA', '2HCB', '2HCC'];
     
-    let matchedAula = '';
-    let role: UserRole = 'alumno';
-
-    for (const aula of aulasList) {
-      const aulaUpper = aula.toUpperCase();
-      const expectedStudentCode = `JCB-${aulaUpper}`;
-      
-      if (cleanCode === expectedStudentCode) {
-        matchedAula = aula;
-        role = 'alumno';
-        break;
-      }
-      
-      if (cleanCode === `PROF-JCB-${aulaUpper}` || (cleanCode.startsWith('PROF-') && cleanCode.includes(aulaUpper))) {
-        matchedAula = aula;
-        role = 'profesor';
-        break;
-      }
-    }
-
-    if (!matchedAula) {
+    // Look up the code in Firestore
+    const codeSnap = await getDoc(doc(db, 'registration_codes', cleanCode));
+    if (!codeSnap.exists()) {
       return { 
         success: false, 
-        error: 'Código de aula no válido. Usa JCB-[AULA] (ej. JCB-2HCA) para alumnos, o PROF-JCB-[AULA] para profesores.' 
+        error: 'El código de registro introducido no es válido o está inactivo. Contacta con el administrador.' 
       };
     }
+
+    const codeData = codeSnap.data();
+    const matchedAula = codeData.classroom || '';
+    const role: UserRole = codeData.role || 'alumno';
 
     const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'US';
     const colors = [
@@ -139,10 +124,10 @@ export default function App() {
       name,
       email: emailLower,
       role: role,
-      roles: role === 'profesor' ? ['profesor'] : ['alumno'],
+      roles: role === 'profesor' ? ['profesor'] : role === 'admin' ? ['admin', 'profesor', 'alumno'] : ['alumno'],
       avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
       initials,
-      color: randomColor,
+      color: role === 'admin' ? 'bg-emerald-600 text-white' : randomColor,
       classroom: matchedAula,
       joinedAt: new Date().toISOString().split('T')[0],
       password: password
@@ -196,7 +181,7 @@ export default function App() {
   const [maxExpositionScore, setMaxExpositionScore] = useState<number>(3.0);
   const [maxCoevalAdjustment, setMaxCoevalAdjustment] = useState<number>(1.0);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [registrationCodes, setRegistrationCodes] = useState<RegistrationCode[]>([]);
 
   // User Management & Active Session Simulation
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -306,11 +291,29 @@ export default function App() {
       setAnnouncements(list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     });
 
-    // H. Sync Invitations
-    const unsubInvitations = onSnapshot(collection(db, 'invitations'), (snapshot) => {
-      const list: Invitation[] = [];
+    // H. Sync Registration Codes
+    const unsubRegistrationCodes = onSnapshot(collection(db, 'registration_codes'), (snapshot) => {
+      if (snapshot.empty) {
+        // Seed default codes so the system works out-of-the-box and maintains compatibility
+        const defaultCodes = [
+          { id: 'JCB-2HCA', role: 'alumno', classroom: '2HCA', createdAt: new Date().toISOString() },
+          { id: 'PROF-JCB-2HCA', role: 'profesor', classroom: '2HCA', createdAt: new Date().toISOString() },
+          { id: 'JCB-2HCB', role: 'alumno', classroom: '2HCB', createdAt: new Date().toISOString() },
+          { id: 'PROF-JCB-2HCB', role: 'profesor', classroom: '2HCB', createdAt: new Date().toISOString() },
+          { id: 'JCB-2HCC', role: 'alumno', classroom: '2HCC', createdAt: new Date().toISOString() },
+          { id: 'PROF-JCB-2HCC', role: 'profesor', classroom: '2HCC', createdAt: new Date().toISOString() },
+        ];
+        defaultCodes.forEach(async (code) => {
+          await setDoc(doc(db, 'registration_codes', code.id), {
+            role: code.role,
+            classroom: code.classroom,
+            createdAt: code.createdAt
+          });
+        });
+      }
+      const list: RegistrationCode[] = [];
       snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as any));
-      setInvitations(list);
+      setRegistrationCodes(list);
     });
 
     // G. Sync Platform Configuration (IES name, logo, maximums, weights)
@@ -343,7 +346,7 @@ export default function App() {
       unsubGrades();
       unsubOral();
       unsubAnnouncements();
-      unsubInvitations();
+      unsubRegistrationCodes();
       unsubConfig();
     };
   }, []);
@@ -479,34 +482,10 @@ export default function App() {
       
       // If not in state, check Firestore directly
       if (!matched) {
-        // Check invitations first
-        const inv = invitations.find(i => i.email.toLowerCase() === emailLower);
-        if (inv) {
-            // Invitation found, create user
-            const newUser: AppUser = {
-              id: `u-${Date.now()}`,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
-              email: emailLower,
-              role: inv.role,
-              roles: [inv.role],
-              avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
-              initials: firebaseUser.displayName 
-                  ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
-                  : emailLower.slice(0, 2).toUpperCase(),
-              color: inv.role === 'admin' ? 'bg-emerald-600 text-white' : 'bg-zinc-600 text-white',
-              joinedAt: new Date().toISOString().split('T')[0],
-              classroom: inv.classroomId
-            };
-            await setDoc(doc(db, 'users', newUser.id), newUser);
-            await deleteDoc(doc(db, 'invitations', inv.id));
-            matched = newUser;
-        } else {
-            // No invitation, continue with normal logic
-            const q = query(collection(db, 'users'), where('email', '==', emailLower));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-              matched = querySnapshot.docs[0].data() as AppUser;
-            }
+        const q = query(collection(db, 'users'), where('email', '==', emailLower));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          matched = querySnapshot.docs[0].data() as AppUser;
         }
       }
       
@@ -552,7 +531,7 @@ export default function App() {
     };
     
     syncUser();
-  }, [firebaseUser, users, invitations, classrooms]);
+  }, [firebaseUser, users, registrationCodes, classrooms]);
 
   // Project inspect syncer
   useEffect(() => {
@@ -1335,7 +1314,7 @@ export default function App() {
             {activeTab === 'users' && (
               <UserManagementTab 
                 users={users}
-                invitations={invitations}
+                registrationCodes={registrationCodes}
                 onUpdateUser={handleUpdateUser}
                 onDeleteUser={handleDeleteUser}
                 onAddUser={handleAddUser}

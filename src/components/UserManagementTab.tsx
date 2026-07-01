@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { 
   UserCheck, 
@@ -21,11 +21,11 @@ import {
   Copy,
   Link
 } from 'lucide-react';
-import { AppUser, UserRole, Invitation } from '../types';
+import { AppUser, UserRole, RegistrationCode } from '../types';
 
 interface UserManagementTabProps {
   users: AppUser[];
-  invitations: Invitation[];
+  registrationCodes: RegistrationCode[];
   onUpdateUser: (updatedUser: AppUser) => void;
   onDeleteUser: (userId: string) => void;
   onAddUser: (newUser: AppUser) => void;
@@ -35,7 +35,7 @@ interface UserManagementTabProps {
 
 export default function UserManagementTab({ 
   users, 
-  invitations,
+  registrationCodes = [],
   onUpdateUser, 
   onDeleteUser, 
   onAddUser,
@@ -46,10 +46,10 @@ export default function UserManagementTab({
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isAddingUser, setIsAddingUser] = useState(false);
   
-  // Invitation states
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<UserRole>('alumno');
-  const [inviteClassroom, setInviteClassroom] = useState('');
+  // Registration code creation states
+  const [newRegCode, setNewRegCode] = useState('');
+  const [regRole, setRegRole] = useState<UserRole>('alumno');
+  const [regClassroom, setRegClassroom] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Form states for manual registration simulation
@@ -70,23 +70,33 @@ export default function UserManagementTab({
   const teachersCount = users.filter(u => u.role === 'profesor').length;
   const studentsCount = users.filter(u => u.role === 'alumno').length;
 
-  const handleCreateInvitation = async (e: React.FormEvent) => {
+  const handleCreateCode = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!inviteEmail.trim()) return;
-      await addDoc(collection(db, 'invitations'), {
-          email: inviteEmail.toLowerCase(),
-          role: inviteRole,
-          classroomId: inviteRole !== 'pending' && inviteClassroom ? inviteClassroom : null,
-          createdAt: new Date().toISOString()
-      });
-      setInviteEmail('');
-      setInviteRole('alumno');
-      setInviteClassroom('');
-      alert(`Invitación creada para ${inviteEmail}`);
+      const cleanCode = newRegCode.trim().toUpperCase();
+      if (!cleanCode) return;
+      if (!regClassroom) {
+        alert('Por favor selecciona un aula para el código de registro.');
+        return;
+      }
+      try {
+        await setDoc(doc(db, 'registration_codes', cleanCode), {
+            role: regRole,
+            classroom: regClassroom,
+            createdAt: new Date().toISOString()
+        });
+        setNewRegCode('');
+        setRegRole('alumno');
+        setRegClassroom('');
+      } catch (err) {
+        console.error("Error creating registration code:", err);
+        alert("No se pudo crear el código de registro.");
+      }
   };
 
-  const handleDeleteInvitation = async (id: string) => {
-      await deleteDoc(doc(db, 'invitations', id));
+  const handleDeleteCode = async (id: string) => {
+      if (confirm(`¿Estás seguro de que quieres eliminar el código de registro "${id}"?`)) {
+        await deleteDoc(doc(db, 'registration_codes', id));
+      }
   };
 
   // Filtered users
@@ -365,38 +375,38 @@ export default function UserManagementTab({
         </div>
       )}
 
-      {/* Invitations Section */}
-      <div className="bg-sky-50/50 border border-sky-200/80 rounded-2xl p-6 shadow-xs animate-fadeIn mb-6">
+      {/* Creador y Gestor de Códigos de Registro */}
+      <div className="bg-indigo-50/50 border border-indigo-200/80 rounded-2xl p-6 shadow-xs animate-fadeIn mb-6">
           <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="text-sm font-bold text-sky-900 flex items-center gap-2">
-                    <Send className="h-4 w-4 text-sky-500" />
-                    <span>Sistema de Invitaciones</span>
+                <h3 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-indigo-500" />
+                    <span>Creador de Códigos de Registro</span>
                 </h3>
-                <p className="text-xs text-sky-700 mt-1">
-                    Genera invitaciones para que los usuarios se registren automáticamente con el rol y aula predefinidos.
+                <p className="text-xs text-indigo-700 mt-1">
+                    Crea y gestiona códigos personalizados para la inscripción manual de alumnos y profesores. Los usuarios introducirán estos códigos al registrarse para asociarse a su aula y perfil correspondiente de forma automática.
                 </p>
               </div>
           </div>
 
-          <form onSubmit={handleCreateInvitation} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end mb-6">
+          <form onSubmit={handleCreateCode} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end mb-6">
             <div>
-              <label className="block text-[11px] font-bold text-sky-800 uppercase tracking-wider mb-1">Correo a invitar</label>
+              <label className="block text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1">Código de Registro (Mayúsculas)</label>
               <input 
-                type="email"
-                placeholder="Ej. alumno@correo.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
+                type="text"
+                placeholder="Ej. JCB-2HCA o PROF-ADMIN"
+                value={newRegCode}
+                onChange={(e) => setNewRegCode(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-zinc-850 font-bold uppercase placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-sky-800 uppercase tracking-wider mb-1">Rol</label>
+              <label className="block text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1">Perfil (Rol)</label>
               <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as UserRole)}
-                className="w-full px-3 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+                value={regRole}
+                onChange={(e) => setRegRole(e.target.value as UserRole)}
+                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
                 <option value="alumno">✏️ Alumno</option>
                 <option value="profesor">🎓 Profesor</option>
@@ -404,13 +414,14 @@ export default function UserManagementTab({
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-sky-800 uppercase tracking-wider mb-1">Aula</label>
+              <label className="block text-[11px] font-bold text-indigo-800 uppercase tracking-wider mb-1">Aula Asignada</label>
               <select 
-                value={inviteClassroom}
-                onChange={(e) => setInviteClassroom(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-sky-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer font-sans font-semibold"
+                value={regClassroom}
+                onChange={(e) => setRegClassroom(e.target.value)}
+                required
+                className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-sans font-semibold"
               >
-                <option value="">-- Sin Aula --</option>
+                <option value="">-- Selecciona Aula --</option>
                 {classrooms.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -418,100 +429,67 @@ export default function UserManagementTab({
             </div>
             <button
                 type="submit"
-                className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition-all shrink-0"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition-all shrink-0 h-[38px] flex items-center justify-center gap-1.5"
               >
-                Generar Invitación
+                <UserPlus className="h-4 w-4" />
+                <span>Crear Código</span>
             </button>
           </form>
 
-          <div className="border-t border-sky-200 pt-4">
-              <h4 className="text-xs font-bold text-sky-800 mb-2">Invitaciones Pendientes ({invitations.length})</h4>
-              <div className="space-y-2">
-                  {invitations.map(inv => {
-                      const link = `${window.location.origin}?invite=${inv.id}`;
-                      const isCopied = copiedId === inv.id;
+          <div className="border-t border-indigo-200 pt-4">
+              <h4 className="text-xs font-bold text-indigo-800 mb-2.5 flex items-center gap-1">
+                <span>Códigos Activos Registrados</span>
+                <span className="bg-indigo-200/70 text-indigo-800 text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold">{registrationCodes.length}</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {registrationCodes.map(code => {
+                      const isCopied = copiedId === code.id;
                       return (
-                          <div key={inv.id} className="bg-white border border-sky-100 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                              <div>
-                                  <span className="font-bold text-sky-900">{inv.email}</span>
-                                  <span className="text-sky-600 mx-2 hidden sm:inline">|</span>
-                                  <span className="text-sky-700 capitalize font-medium">{inv.role}</span>
-                                  {inv.classroomId && <span className="text-sky-700 font-bold ml-2">({inv.classroomId})</span>}
-                                  <span className="text-[10px] text-zinc-400 block font-mono truncate max-w-xs sm:max-w-md mt-0.5" title={link}>
-                                      {link}
+                          <div key={code.id} className="bg-white border border-indigo-100 rounded-xl p-3 flex items-center justify-between text-xs shadow-xs">
+                              <div className="min-w-0 flex-1 mr-2">
+                                  <div className="flex items-center gap-1.5">
+                                      <span className="font-mono font-extrabold text-indigo-900 tracking-wider text-xs">{code.id}</span>
+                                      <span className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold uppercase ${
+                                          code.role === 'admin' 
+                                              ? 'bg-rose-50 text-rose-700 border border-rose-100' 
+                                              : code.role === 'profesor' 
+                                                  ? 'bg-amber-50 text-amber-700 border border-amber-100' 
+                                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                      }`}>
+                                          {code.role}
+                                      </span>
+                                  </div>
+                                  <span className="text-[10px] text-zinc-500 font-medium block mt-1">
+                                      Aula: <strong className="font-extrabold text-zinc-700">{code.classroom}</strong>
                                   </span>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              <div className="flex items-center gap-1">
                                   <button 
                                       onClick={() => {
-                                          navigator.clipboard.writeText(link);
-                                          setCopiedId(inv.id);
-                                          setTimeout(() => setCopiedId(null), 2000);
+                                          navigator.clipboard.writeText(code.id);
+                                          setCopiedId(code.id);
+                                          setTimeout(() => setCopiedId(null), 1500);
                                       }}
-                                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                                      className={`p-1.5 rounded-lg border text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
                                           isCopied 
                                               ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900'
+                                              : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-600'
                                       }`}
-                                      title="Copiar enlace de invitación"
+                                      title="Copiar código"
                                   >
-                                      {isCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                                      <span>{isCopied ? 'Copiado' : 'Copiar Enlace'}</span>
+                                      {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                                   </button>
                                   <button 
-                                      onClick={() => handleDeleteInvitation(inv.id)} 
-                                      className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                      title="Eliminar invitación"
+                                      onClick={() => handleDeleteCode(code.id)} 
+                                      className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-100 shrink-0"
+                                      title="Eliminar código"
                                   >
-                                      <Trash2 className="h-4 w-4" />
+                                      <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                               </div>
                           </div>
                       );
                   })}
-              </div>
-
-              {/* Fast Classroom Links */}
-              <div className="mt-5 pt-4 border-t border-sky-200/60">
-                  <h4 className="text-xs font-bold text-sky-800 mb-2 flex items-center gap-1.5">
-                      <Link className="h-3.5 w-3.5 text-sky-500" />
-                      <span>Enlaces de Registro Directo para Alumnos (Moodle / Correo)</span>
-                  </h4>
-                  <p className="text-[11px] text-sky-700 mb-3">
-                      Copia estos enlaces para publicarlos en tu aula Moodle o enviarlos por correo masivo. Cualquier alumno que acceda mediante estos enlaces será asignado automáticamente con el rol de <strong className="font-bold">Alumno</strong> en el aula correspondiente.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {classrooms.map(c => {
-                          const link = `${window.location.origin}?aula=${c}`;
-                          const isCopied = copiedId === `aula-${c}`;
-                          return (
-                              <div key={c} className="bg-white border border-sky-100 rounded-xl p-3 flex items-center justify-between text-xs shadow-xs">
-                                  <div className="min-w-0 flex-1 mr-2">
-                                      <span className="font-extrabold text-zinc-800 flex items-center gap-1">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                                          <span>Aula {c}</span>
-                                      </span>
-                                      <span className="text-[10px] text-zinc-400 font-mono block truncate mt-0.5" title={link}>{link}</span>
-                                  </div>
-                                  <button 
-                                      onClick={() => {
-                                          navigator.clipboard.writeText(link);
-                                          setCopiedId(`aula-${c}`);
-                                          setTimeout(() => setCopiedId(null), 2000);
-                                      }}
-                                      className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
-                                          isCopied 
-                                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                              : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-700'
-                                      }`}
-                                  >
-                                      {isCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                                      <span>{isCopied ? '¡Copiado!' : 'Copiar'}</span>
-                                  </button>
-                              </div>
-                          );
-                      })}
-                  </div>
               </div>
           </div>
       </div>

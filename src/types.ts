@@ -89,11 +89,10 @@ export interface Announcement {
   readByStudentIds?: string[];
 }
 
-export interface Invitation {
-  id: string;
-  email: string;
+export interface RegistrationCode {
+  id: string; // El código en mayúsculas (clave única, ej: JCB-2HCA o PROF-ADMIN)
   role: UserRole;
-  classroomId?: string;
+  classroom: string;
   createdAt: string;
 }
 
