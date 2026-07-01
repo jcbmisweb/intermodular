@@ -939,60 +939,6 @@ export default function AlumnoDashboard({
 
         </div>
 
-        {/* Sidebar Footer Widget - Matches first screenshot exactly */}
-        <div className="p-4 border-t border-zinc-800/90 bg-zinc-950/40">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase">Proyecto</span>
-              <button 
-                onClick={handleCopyCode}
-                className="flex items-center gap-1 text-[10px] font-bold font-mono text-emerald-400 bg-emerald-950/50 border border-emerald-900/60 px-1.5 py-0.5 rounded cursor-pointer hover:bg-emerald-900 hover:text-white transition-colors"
-              >
-                <span>#{gastState?.id || '----'}</span>
-                <Copy className="h-2.5 w-2.5" />
-              </button>
-            </div>
-            
-            <div className="space-y-1">
-              <div className="flex justify-between">
-                <span className="text-zinc-500 text-[11px]">Equipo:</span>
-                <span className="font-bold text-zinc-200 truncate max-w-[110px]" title={gastState?.teamName || 'Sin Definir'}>
-                  {gastState?.teamName || 'Sin Definir'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500 text-[11px]">Estado:</span>
-                <span className={`font-bold uppercase text-[10px] ${gastState?.isOpen ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {gastState?.isOpen ? 'Abierto' : 'Cerrado'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500 text-[11px]">Carta:</span>
-                <span className="font-bold text-zinc-200 font-mono">
-                  {(gastState?.dishes || []).length}/4 platos
-                </span>
-              </div>
-            </div>
-
-            {currentProject && (
-              <button
-                onClick={() => {
-                  const nextOpen = !gastState.isOpen;
-                  updateField('isOpen', nextOpen);
-                  triggerToast(nextOpen ? '🔓 Equipo Abierto para Colaboración' : '🔒 Equipo Cerrado de forma provisional');
-                }}
-                className={`w-full py-2 rounded-lg text-center font-bold text-[11px] transition-all cursor-pointer ${
-                  gastState?.isOpen 
-                    ? 'bg-rose-950/50 border border-rose-900/60 text-rose-300 hover:bg-rose-900 hover:text-white'
-                    : 'bg-emerald-950/50 border border-emerald-900/60 text-emerald-300 hover:bg-emerald-900 hover:text-white'
-                }`}
-              >
-                {gastState?.isOpen ? '🔒 Cerrar Equipo' : '🔓 Abrir Equipo'}
-              </button>
-            )}
-          </div>
-        </div>
-
       </aside>
 
       {/* MAIN VIEWPORT */}
