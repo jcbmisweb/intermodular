@@ -62,6 +62,7 @@ export default function UserManagementTab({
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<UserRole>('pending');
   const [editClassroom, setEditClassroom] = useState('');
+  const [editPassword, setEditPassword] = useState('');
 
   // Stats
   const totalUsers = users.length;
@@ -148,6 +149,7 @@ export default function UserManagementTab({
     setEditingUserId(user.id);
     setEditRole(user.role);
     setEditClassroom(user.classroom || '');
+    setEditPassword(user.password || '');
   };
 
   const saveEdit = (user: AppUser) => {
@@ -161,7 +163,8 @@ export default function UserManagementTab({
       ...user,
       role: editRole,
       roles: rolesList,
-      classroom: editRole !== 'pending' && editClassroom.trim() ? editClassroom : undefined
+      classroom: editRole !== 'pending' && editClassroom.trim() ? editClassroom : undefined,
+      password: editPassword.trim() || undefined
     });
     setEditingUserId(null);
   };
@@ -523,13 +526,14 @@ export default function UserManagementTab({
                 <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fecha Alta</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Perfil (Rol)</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Aula Asignada</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">PIN / Contraseña</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-10 text-xs text-zinc-400 font-medium">
+                  <td colSpan={6} className="text-center py-10 text-xs text-zinc-400 font-medium">
                     No se encontraron usuarios con los filtros aplicados.
                   </td>
                 </tr>
@@ -645,6 +649,23 @@ export default function UserManagementTab({
                               </span>
                             )}
                           </div>
+                        )}
+                      </td>
+
+                      {/* PIN / Contraseña */}
+                      <td className="px-6 py-4 font-mono text-xs">
+                        {isEditing ? (
+                          <input 
+                            type="text" 
+                            value={editPassword} 
+                            onChange={(e) => setEditPassword(e.target.value)}
+                            placeholder="Sin PIN o contraseña"
+                            className="w-28 px-2 py-1 bg-white border border-zinc-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-zinc-900 focus:outline-none"
+                          />
+                        ) : (
+                          <span className="bg-zinc-100 text-zinc-600 px-2.5 py-1 rounded-lg border border-zinc-200">
+                            {user.password || <span className="text-[10px] text-zinc-400 italic font-sans font-medium">Sin PIN</span>}
+                          </span>
                         )}
                       </td>
 

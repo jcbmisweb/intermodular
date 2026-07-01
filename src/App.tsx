@@ -51,6 +51,7 @@ import LoginPage from './components/LoginPage';
 
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [localUser, setLocalUser] = useState<AppUser | null>(null);
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -58,6 +59,98 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  const handleCredentialLogin = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const emailLower = email.toLowerCase().trim();
+    // Look up user in the live Firestore users list
+    const q = query(collection(db, 'users'), where('email', '==', emailLower));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      return { success: false, error: 'No se encontró ningún usuario con ese correo electrónico.' };
+    }
+    const user = snap.docs[0].data() as AppUser;
+    if (!user.password || user.password !== password) {
+      return { success: false, error: 'La contraseña o código de seguridad es incorrecto.' };
+    }
+    
+    // Success! Log them in
+    setLocalUser(user);
+    setCurrentUser(user);
+    setActiveRole(user.role);
+    localStorage.setItem('studio_local_user_id', user.id);
+    localStorage.setItem('studio_current_user_id_v2', user.id);
+    return { success: true };
+  };
+
+  const handleCredentialRegister = async (name: string, email: string, code: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const emailLower = email.toLowerCase().trim();
+    
+    // Check if email already registered
+    const q = query(collection(db, 'users'), where('email', '==', emailLower));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return { success: false, error: 'Este correo electrónico ya está registrado. Por favor, inicia sesión.' };
+    }
+
+    const cleanCode = code.trim().toUpperCase();
+    const aulasList = classrooms.length > 0 ? classrooms : ['2HCA', '2HCB', '2HCC'];
+    
+    let matchedAula = '';
+    let role: UserRole = 'alumno';
+
+    for (const aula of aulasList) {
+      const aulaUpper = aula.toUpperCase();
+      const expectedStudentCode = `JCB-${aulaUpper}`;
+      
+      if (cleanCode === expectedStudentCode) {
+        matchedAula = aula;
+        role = 'alumno';
+        break;
+      }
+      
+      if (cleanCode === `PROF-JCB-${aulaUpper}` || (cleanCode.startsWith('PROF-') && cleanCode.includes(aulaUpper))) {
+        matchedAula = aula;
+        role = 'profesor';
+        break;
+      }
+    }
+
+    if (!matchedAula) {
+      return { 
+        success: false, 
+        error: 'Código de aula no válido. Usa JCB-[AULA] (ej. JCB-2HCA) para alumnos, o PROF-JCB-[AULA] para profesores.' 
+      };
+    }
+
+    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'US';
+    const colors = [
+      'bg-red-500 text-white', 
+      'bg-blue-500 text-white', 
+      'bg-green-500 text-white', 
+      'bg-amber-500 text-white', 
+      'bg-purple-500 text-white', 
+      'bg-pink-500 text-white', 
+      'bg-indigo-500 text-white'
+    ];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const newUser: AppUser = {
+      id: `u-${Date.now()}`,
+      name,
+      email: emailLower,
+      role: role,
+      roles: role === 'profesor' ? ['profesor'] : ['alumno'],
+      avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
+      initials,
+      color: randomColor,
+      classroom: matchedAula,
+      joinedAt: new Date().toISOString().split('T')[0],
+      password: password
+    };
+
+    await setDoc(doc(db, 'users', newUser.id), newUser);
+    return { success: true };
+  };
 
   const handleLogin = async () => {
     try {
@@ -69,6 +162,11 @@ export default function App() {
 
   const handleLogout = async () => {
     await signOut(auth);
+    setLocalUser(null);
+    setCurrentUser(null);
+    setActiveRole(null);
+    localStorage.removeItem('studio_local_user_id');
+    localStorage.removeItem('studio_current_user_id_v2');
   };
 
   // Core Data State (synchronized with localStorage)
@@ -104,6 +202,21 @@ export default function App() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [activeRole, setActiveRole] = useState<UserRole | null>(null);
+
+  // Sync/Load localUser from cache on start or list change
+  useEffect(() => {
+    const savedLocalUserId = localStorage.getItem('studio_local_user_id');
+    if (savedLocalUserId && users.length > 0) {
+      const matched = users.find(u => u.id === savedLocalUserId);
+      if (matched) {
+        setLocalUser(matched);
+        setCurrentUser(matched);
+        if (!activeRole) {
+          setActiveRole(matched.role);
+        }
+      }
+    }
+  }, [users, activeRole]);
 
   // Modal / Drawer States
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -1272,14 +1385,21 @@ export default function App() {
     );
   };
 
-  const googleLinkedUser = firebaseUser 
+  const loggedInUser = firebaseUser 
     ? users.find(u => u.email?.toLowerCase() === firebaseUser.email?.toLowerCase()) 
-    : null;
+    : localUser;
+
+  const isLogged = !!firebaseUser || !!localUser;
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
-      {!firebaseUser ? (
-        <LoginPage onLogin={handleLogin} />
+      {!isLogged ? (
+        <LoginPage 
+          onLogin={handleLogin} 
+          onCredentialLogin={handleCredentialLogin}
+          onCredentialRegister={handleCredentialRegister}
+          classrooms={classrooms}
+        />
       ) : (
         <>
           {/* ⚠️ Simulated Environment Top Navigation Banner */}
@@ -1294,7 +1414,7 @@ export default function App() {
             
             <div className="flex items-center gap-3 flex-wrap">
               {/* If the logged-in Google user is an admin, always show the user simulation dropdown so they can switch between different users */}
-              {googleLinkedUser?.roles.includes('admin') && (
+              {loggedInUser?.roles.includes('admin') && (
                 <div className="flex items-center gap-2">
                   <span className="text-zinc-400 font-medium text-[11px]">Simular Usuario:</span>
                   <select 

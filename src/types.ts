@@ -13,6 +13,7 @@ export interface AppUser {
   color: string; // background color class
   classroom?: string; // Aula asignada
   joinedAt: string;
+  password?: string; // Código de seguridad o contraseña
 }
 
 export interface Task {
