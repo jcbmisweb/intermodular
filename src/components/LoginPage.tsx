@@ -80,17 +80,17 @@ export default function LoginPage({
           regPassword.trim()
         );
         if (res.success) {
-          setRegSuccess('¡Inscripción completada con éxito! Ya puedes iniciar sesión con tus credenciales.');
+          setRegSuccess('¡Inscripción registrada con éxito! Tu solicitud se ha enviado al Administrador para asignación de aula y perfil. Ya puedes acceder.');
           // Reset form fields
           setRegName('');
           setRegEmail('');
           setRegCode('');
           setRegPassword('');
-          // Auto switch to login tab after 2 seconds
+          // Auto switch to login tab after 3 seconds
           setTimeout(() => {
             setActiveTab('login');
             setRegSuccess('');
-          }, 2500);
+          }, 3500);
         } else {
           setRegError(res.error || 'No se pudo completar el registro. Comprueba el código de aula.');
         }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { db } from '../lib/firebase';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { 
@@ -243,14 +243,45 @@ export default function ProfesorDashboard({
 
   const [newAnnouncement, setNewAnnouncement] = useState('');
 
-  // Classroom assigned to the professor
-  const assignedClassroom = currentUser.classroom || 'Aula de Desarrollo Web';
+  // Available classrooms extracted from students, projects or default list
+  const availableClassrooms = useMemo(() => {
+    const set = new Set<string>(['2HCA', '2HCB', '2HCC']);
+    allUsers.forEach(u => {
+      if (u.classroom) set.add(u.classroom);
+    });
+    projects.forEach(p => {
+      if (p.classroom) set.add(p.classroom);
+    });
+    return Array.from(set);
+  }, [allUsers, projects]);
 
-  // Alumnos assigned to this classroom
-  const classroomStudents = allUsers.filter(u => u.role === 'alumno' && u.classroom === assignedClassroom);
+  const [selectedClassroomFilter, setSelectedClassroomFilter] = useState<string>('TODAS');
 
-  // Projects assigned to this classroom
-  const classroomProjects = projects.filter(p => p.classroom === assignedClassroom);
+  // Classroom assigned to the professor or currently selected filter
+  const assignedClassroom = selectedClassroomFilter === 'TODAS'
+    ? (currentUser.classroom || '2HCA')
+    : selectedClassroomFilter;
+
+  // Alumnos assigned to this view
+  const classroomStudents = useMemo(() => {
+    if (selectedClassroomFilter === 'TODAS') {
+      return allUsers.filter(u => u.role === 'alumno');
+    }
+    return allUsers.filter(u => u.role === 'alumno' && u.classroom === selectedClassroomFilter);
+  }, [allUsers, selectedClassroomFilter]);
+
+  // Pending students waiting for approval or classroom assignment
+  const pendingStudents = useMemo(() => {
+    return allUsers.filter(u => u.role === 'pending');
+  }, [allUsers]);
+
+  // Projects assigned to this view
+  const classroomProjects = useMemo(() => {
+    if (selectedClassroomFilter === 'TODAS') {
+      return projects;
+    }
+    return projects.filter(p => p.classroom === selectedClassroomFilter);
+  }, [projects, selectedClassroomFilter]);
 
   // Local state for Quick Project Generator
   const [numProjectsToCreate, setNumProjectsToCreate] = useState<number>(5);
@@ -400,14 +431,35 @@ export default function ProfesorDashboard({
           </div>
         </div>
 
-        {/* Info panel */}
+        {/* Info panel with Classroom Selector */}
         <div className="p-4 border-b border-zinc-800 bg-zinc-950/40">
-          <span className="text-[9px] uppercase font-bold text-zinc-500 tracking-widest block px-2 mb-2">
-            Aula Asignada
-          </span>
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 p-2 rounded-xl">
-            <Building2 className="h-4 w-4 text-indigo-400 shrink-0" />
-            <span className="text-xs font-bold text-zinc-200 truncate">{assignedClassroom}</span>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-[9px] uppercase font-bold text-zinc-500 tracking-widest block">
+              Filtro de Aula ({classroomStudents.length} alumnos)
+            </span>
+            {pendingStudents.length > 0 && (
+              <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold">
+                {pendingStudents.length} pend.
+              </span>
+            )}
+          </div>
+          <div className="relative">
+            <select
+              value={selectedClassroomFilter}
+              onChange={(e) => setSelectedClassroomFilter(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-700 text-xs font-bold text-indigo-300 py-2 pl-8 pr-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-all"
+            >
+              <option value="TODAS">🏫 Ver Todas las Aulas ({allUsers.filter(u => u.role === 'alumno').length} alumnos)</option>
+              {availableClassrooms.map(c => {
+                const count = allUsers.filter(u => u.role === 'alumno' && u.classroom === c).length;
+                return (
+                  <option key={c} value={c}>
+                    📍 Aula {c} ({count} alumnos)
+                  </option>
+                );
+              })}
+            </select>
+            <Building2 className="h-4 w-4 text-indigo-400 absolute left-2.5 top-2.5 pointer-events-none" />
           </div>
         </div>
 
@@ -553,7 +605,7 @@ export default function ProfesorDashboard({
               </span>
             </h1>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Gestionando el <strong className="text-zinc-700 font-bold">{assignedClassroom}</strong> con proyectos escolares activos.
+              Gestionando <strong className="text-zinc-700 font-bold">{selectedClassroomFilter === 'TODAS' ? 'Todas las Aulas' : `el Aula ${selectedClassroomFilter}`}</strong> ({classroomStudents.length} alumnos registrados).
             </p>
           </div>
 

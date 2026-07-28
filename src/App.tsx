@@ -62,13 +62,20 @@ export default function App() {
 
   const handleCredentialLogin = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     const emailLower = email.toLowerCase().trim();
-    // Look up user in the live Firestore users list
-    const q = query(collection(db, 'users'), where('email', '==', emailLower));
-    const snap = await getDocs(q);
-    if (snap.empty) {
+    // Look up user in state or Firestore
+    let user = users.find(u => u.email?.toLowerCase() === emailLower);
+
+    if (!user) {
+      const q = query(collection(db, 'users'), where('email', '==', emailLower));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        user = { ...snap.docs[0].data(), id: snap.docs[0].id } as AppUser;
+      }
+    }
+
+    if (!user) {
       return { success: false, error: 'No se encontró ningún usuario con ese correo electrónico.' };
     }
-    const user = snap.docs[0].data() as AppUser;
     if (!user.password || user.password !== password) {
       return { success: false, error: 'La contraseña o código de seguridad es incorrecto.' };
     }
@@ -85,7 +92,12 @@ export default function App() {
   const handleCredentialRegister = async (name: string, email: string, code: string, password: string): Promise<{ success: boolean; error?: string }> => {
     const emailLower = email.toLowerCase().trim();
     
-    // Check if email already registered
+    // Check if email already registered in state or Firestore
+    const existingInState = users.some(u => u.email?.toLowerCase() === emailLower);
+    if (existingInState) {
+      return { success: false, error: 'Este correo electrónico ya está registrado. Por favor, inicia sesión.' };
+    }
+
     const q = query(collection(db, 'users'), where('email', '==', emailLower));
     const snap = await getDocs(q);
     if (!snap.empty) {
@@ -93,19 +105,35 @@ export default function App() {
     }
 
     const cleanCode = code.trim().toUpperCase();
+    let matchedAula = '';
+    let role: UserRole = 'alumno';
     
-    // Look up the code in Firestore
+    // 1. Check exact registration code in Firestore
     const codeSnap = await getDoc(doc(db, 'registration_codes', cleanCode));
-    if (!codeSnap.exists()) {
-      return { 
-        success: false, 
-        error: 'El código de registro introducido no es válido o está inactivo. Contacta con el administrador.' 
-      };
+    if (codeSnap.exists()) {
+      const codeData = codeSnap.data();
+      matchedAula = codeData.classroom || '';
+      role = codeData.role || 'alumno';
+    } else {
+      // 2. Check if cleanCode matches an active classroom name directly (e.g. "2HCA")
+      const matchedClassroom = classrooms.find(c => c.toUpperCase() === cleanCode);
+      if (matchedClassroom) {
+        matchedAula = matchedClassroom;
+        role = cleanCode.startsWith('PROF') ? 'profesor' : 'alumno';
+      } else {
+        // 3. Check if cleanCode contains any active classroom name (e.g. "JCB-2HCA" -> "2HCA")
+        const foundClass = classrooms.find(c => cleanCode.includes(c.toUpperCase()));
+        if (foundClass) {
+          matchedAula = foundClass;
+          role = cleanCode.includes('PROF') ? 'profesor' : 'alumno';
+        } else {
+          return { 
+            success: false, 
+            error: `El código de registro "${cleanCode}" no es válido. Usa códigos como JCB-2HCA, PROF-JCB-2HCA o directamente el nombre del aula (2HCA, 2HCB, 2HCC).` 
+          };
+        }
+      }
     }
-
-    const codeData = codeSnap.data();
-    const matchedAula = codeData.classroom || '';
-    const role: UserRole = codeData.role || 'alumno';
 
     const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'US';
     const colors = [
@@ -121,16 +149,18 @@ export default function App() {
 
     const newUser: AppUser = {
       id: `u-${Date.now()}`,
-      name,
+      name: name.trim(),
       email: emailLower,
-      role: role,
-      roles: role === 'profesor' ? ['profesor'] : role === 'admin' ? ['admin', 'profesor', 'alumno'] : ['alumno'],
+      role: 'pending',
+      roles: ['pending'],
       avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(emailLower)}`,
       initials,
-      color: role === 'admin' ? 'bg-emerald-600 text-white' : randomColor,
+      color: randomColor,
       classroom: matchedAula,
+      requestedRole: role,
       joinedAt: new Date().toISOString().split('T')[0],
-      password: password
+      password: password,
+      status: 'pending'
     };
 
     await setDoc(doc(db, 'users', newUser.id), newUser);
@@ -1085,16 +1115,16 @@ export default function App() {
           onUpdateCurrentUser={handleUpdateUser} 
           onLogoutToAdmin={() => handleSwitchSession('u-admin')} 
           classrooms={classrooms}
-          onJoinClassroomByCode={async (code) => {
+          onJoinClassroomByCode={async (classroomCode, targetRole = 'alumno') => {
             if (currentUser) {
               const updatedUser: AppUser = {
                 ...currentUser,
-                role: 'alumno',
-                roles: ['alumno'],
-                classroom: code
+                role: targetRole,
+                roles: targetRole === 'profesor' ? ['profesor'] : ['alumno'],
+                classroom: classroomCode
               };
               await handleUpdateUser(updatedUser);
-              setActiveRole('alumno');
+              setActiveRole(targetRole);
             }
           }}
         />

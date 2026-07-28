@@ -677,32 +677,40 @@ export default function UserManagementTab({
                               </button>
                               
                               {user.role === 'pending' && (
-                                <div className="flex gap-1">
+                                <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => {
-                                      // Quick approval as Alumno
+                                      const targetClass = user.classroom || classrooms[0] || '2HCA';
                                       onUpdateUser({
                                         ...user,
                                         role: 'alumno',
-                                        classroom: classrooms[0] || '2HCA'
+                                        roles: ['alumno'],
+                                        classroom: targetClass,
+                                        status: 'active'
                                       });
                                     }}
-                                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer border border-emerald-100"
+                                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer border border-emerald-200 flex items-center gap-1 shadow-2xs"
+                                    title="Aprobar inmediatamente como Alumno"
                                   >
-                                    Asignar Alumno {classrooms[0] ? `(${classrooms[0]})` : ''}
+                                    <UserCheck className="h-3 w-3 text-emerald-600" />
+                                    <span>Aprobar Alumno ({user.classroom || classrooms[0] || '2HCA'})</span>
                                   </button>
                                   <button
                                     onClick={() => {
-                                      // Quick approval as Profesor
+                                      const targetClass = user.classroom || classrooms[0] || '2HCA';
                                       onUpdateUser({
                                         ...user,
                                         role: 'profesor',
-                                        classroom: classrooms[0] || '2HCA'
+                                        roles: ['profesor'],
+                                        classroom: targetClass,
+                                        status: 'active'
                                       });
                                     }}
-                                    className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer border border-indigo-100"
+                                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer border border-indigo-200 flex items-center gap-1 shadow-2xs"
+                                    title="Aprobar inmediatamente como Profesor"
                                   >
-                                    Asignar Profesor {classrooms[0] ? `(${classrooms[0]})` : ''}
+                                    <Shield className="h-3 w-3 text-indigo-600" />
+                                    <span>Aprobar Profesor ({user.classroom || classrooms[0] || '2HCA'})</span>
                                   </button>
                                 </div>
                               )}

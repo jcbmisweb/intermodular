@@ -16,7 +16,7 @@ interface PendingSpaceProps {
   onUpdateCurrentUser: (updatedUser: AppUser) => void;
   onLogoutToAdmin: () => void;
   classrooms?: string[];
-  onJoinClassroomByCode?: (code: string) => void;
+  onJoinClassroomByCode?: (classroomCode: string, targetRole?: 'alumno' | 'profesor') => void;
 }
 
 const PRESET_AVATARS = [
@@ -81,16 +81,25 @@ export default function PendingSpace({
     setCodeError('');
     const code = codeEntered.trim().toUpperCase();
     if (!code) {
-      setCodeError('Por favor introduce un código de aula.');
+      setCodeError('Por favor introduce un código de aula o de registro (ej. JCB-2HCA o 2HCA).');
       return;
     }
-    const found = classrooms.some(c => c.toUpperCase() === code);
-    if (!found) {
-      setCodeError(`El código "${code}" no corresponde a ningún aula activa.`);
+
+    let matchedClassroom = classrooms.find(c => c.toUpperCase() === code);
+    let targetRole: 'alumno' | 'profesor' = code.includes('PROF') ? 'profesor' : 'alumno';
+
+    if (!matchedClassroom) {
+      // Check if code contains any classroom name (e.g. JCB-2HCA or PROF-JCB-2HCA)
+      matchedClassroom = classrooms.find(c => code.includes(c.toUpperCase()));
+    }
+
+    if (!matchedClassroom) {
+      setCodeError(`El código "${code}" no corresponde a ninguna aula activa (${classrooms.join(', ')}).`);
       return;
     }
+
     if (onJoinClassroomByCode) {
-      onJoinClassroomByCode(code);
+      onJoinClassroomByCode(matchedClassroom, targetRole);
     }
   };
 

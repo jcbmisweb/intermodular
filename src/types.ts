@@ -14,6 +14,8 @@ export interface AppUser {
   classroom?: string; // Aula asignada
   joinedAt: string;
   password?: string; // Código de seguridad o contraseña
+  status?: 'active' | 'pending';
+  requestedRole?: UserRole;
 }
 
 export interface Task {
