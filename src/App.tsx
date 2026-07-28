@@ -656,7 +656,9 @@ export default function App() {
         };
         
         await setDoc(doc(db, 'users', newUser.id), newUser);
-        // Note: onSnapshot will catch this and update state automatically
+        setCurrentUser(newUser);
+        setActiveRole(newUser.role);
+        localStorage.setItem('studio_current_user_id_v2', newUser.id);
       }
     };
     

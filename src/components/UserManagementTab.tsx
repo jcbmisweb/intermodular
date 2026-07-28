@@ -237,6 +237,113 @@ export default function UserManagementTab({
 
       </div>
 
+      {/* Pending Approvals Dedicated Section */}
+      {pendingUsersCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-xs">
+                <Clock className="h-5 w-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
+                  <span>Solicitudes de Acceso Pendientes</span>
+                  <span className="px-2 py-0.5 bg-amber-500 text-white rounded-full text-xs font-bold">
+                    {pendingUsersCount}
+                  </span>
+                </h3>
+                <p className="text-xs text-amber-800">
+                  Nuevas cuentas registradas vía Google o Formulario esperando asignación de aula y perfil por el Administrador.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {users.filter(u => u.role === 'pending').map((pendingUser) => {
+              const defaultAula = pendingUser.classroom || classrooms[0] || '2HCA';
+              return (
+                <div key={pendingUser.id} className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col justify-between gap-3 shadow-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img 
+                        src={pendingUser.avatarUrl} 
+                        alt={pendingUser.name} 
+                        className="w-10 h-10 rounded-full border border-amber-200 shrink-0 bg-amber-50"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 truncate">{pendingUser.name}</p>
+                        <p className="text-[11px] text-zinc-500 truncate">{pendingUser.email}</p>
+                        <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-mono mt-1 inline-block">
+                          Alta: {pendingUser.joinedAt}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onDeleteUser(pendingUser.id)}
+                      className="p-1.5 text-zinc-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all cursor-pointer"
+                      title="Rechazar y eliminar solicitud"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-amber-100 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-amber-600" />
+                      <select
+                        defaultValue={defaultAula}
+                        id={`pending-aula-${pendingUser.id}`}
+                        className="bg-zinc-50 border border-zinc-200 text-xs font-semibold rounded-lg px-2 py-1 text-zinc-800 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                      >
+                        {(classrooms.length > 0 ? classrooms : ['2HCA', '2HCB', '2HCC']).map(c => (
+                          <option key={c} value={c}>Aula {c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          const selectedClass = (document.getElementById(`pending-aula-${pendingUser.id}`) as HTMLSelectElement)?.value || defaultAula;
+                          onUpdateUser({
+                            ...pendingUser,
+                            role: 'alumno',
+                            roles: ['alumno'],
+                            classroom: selectedClass,
+                            status: 'active'
+                          });
+                        }}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                      >
+                        <UserCheck className="h-3.5 w-3.5" />
+                        <span>Aprobar Alumno</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const selectedClass = (document.getElementById(`pending-aula-${pendingUser.id}`) as HTMLSelectElement)?.value || defaultAula;
+                          onUpdateUser({
+                            ...pendingUser,
+                            role: 'profesor',
+                            roles: ['profesor'],
+                            classroom: selectedClass,
+                            status: 'active'
+                          });
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                      >
+                        <Shield className="h-3.5 w-3.5" />
+                        <span>Aprobar Profesor</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Action header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
         
