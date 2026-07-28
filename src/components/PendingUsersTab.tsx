@@ -32,7 +32,7 @@ export default function PendingUsersTab({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAulaMap, setSelectedAulaMap] = useState<Record<string, string>>({});
 
-  const pendingUsers = users.filter(u => u.role === 'pending');
+  const pendingUsers = users.filter(u => u.role === 'pending' || u.status === 'pending' || (u.roles && u.roles.includes('pending')));
 
   const filteredPending = pendingUsers.filter(user => {
     const matchesSearch = 

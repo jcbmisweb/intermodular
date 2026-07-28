@@ -235,20 +235,29 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [activeRole, setActiveRole] = useState<UserRole | null>(null);
 
-  // Sync/Load localUser from cache on start or list change
+  // Sync/Load localUser from cache on start or when currentUser is not set
   useEffect(() => {
-    const savedLocalUserId = localStorage.getItem('studio_local_user_id');
-    if (savedLocalUserId && users.length > 0) {
-      const matched = users.find(u => u.id === savedLocalUserId);
-      if (matched) {
-        setLocalUser(matched);
-        setCurrentUser(matched);
-        if (!activeRole) {
-          setActiveRole(matched.role);
+    if (users.length > 0) {
+      const savedUserId = localStorage.getItem('studio_current_user_id_v2') || localStorage.getItem('studio_local_user_id');
+      if (savedUserId) {
+        const matched = users.find(u => u.id === savedUserId);
+        if (matched) {
+          setLocalUser(matched);
+          if (!currentUser) {
+            setCurrentUser(matched);
+            setActiveRole(matched.role);
+          }
+        }
+      }
+      if (!currentUser) {
+        const adminUser = users.find(u => u.id === 'u-admin' || u.role === 'admin') || users[0];
+        if (adminUser) {
+          setCurrentUser(adminUser);
+          setActiveRole(adminUser.role);
         }
       }
     }
-  }, [users, activeRole]);
+  }, [users]);
 
   // Modal / Drawer States
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -662,13 +671,23 @@ export default function App() {
           matched = updatedUser;
         }
         
-        // User already exists
-        setCurrentUser(matched);
-        setActiveRole(matched.role);
-        localStorage.setItem('studio_current_user_id_v2', matched.id);
+        // Ensure user is in local users state & cache
+        const finalMatched = matched;
+        setUsers(prev => {
+          const filtered = prev.filter(u => u.id !== finalMatched.id && u.email !== finalMatched.email);
+          const newList = [...filtered, finalMatched];
+          localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
+          return newList;
+        });
+
+        // Set active current user if not manually simulating another account
+        if (!currentUser || currentUser.email === emailLower) {
+          setCurrentUser(finalMatched);
+          setActiveRole(finalMatched.role);
+          localStorage.setItem('studio_current_user_id_v2', finalMatched.id);
+        }
       } else {
-        // No match and no invitation, perhaps auto-create as student? Or do nothing?
-        // User not found, create them!
+        // User not found, create them as pending (or admin if superadmin)
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
@@ -686,14 +705,24 @@ export default function App() {
         };
         
         await setDoc(doc(db, 'users', newUser.id), newUser);
-        setCurrentUser(newUser);
-        setActiveRole(newUser.role);
-        localStorage.setItem('studio_current_user_id_v2', newUser.id);
+        
+        setUsers(prev => {
+          const filtered = prev.filter(u => u.id !== newUser.id && u.email !== newUser.email);
+          const newList = [...filtered, newUser];
+          localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
+          return newList;
+        });
+
+        if (!currentUser || currentUser.email === emailLower) {
+          setCurrentUser(newUser);
+          setActiveRole(newUser.role);
+          localStorage.setItem('studio_current_user_id_v2', newUser.id);
+        }
       }
     };
     
     syncUser();
-  }, [firebaseUser, users, registrationCodes, classrooms]);
+  }, [firebaseUser]);
 
   // Project inspect syncer
   useEffect(() => {
@@ -1328,11 +1357,11 @@ export default function App() {
               <Clock className="h-4 w-4 shrink-0" />
               <div className="flex-1 flex items-center justify-between">
                 <span>Nuevos Usuarios</span>
-                {users.filter(u => u.role === 'pending').length > 0 && (
+                {users.filter(u => u.role === 'pending' || u.status === 'pending' || (u.roles && u.roles.includes('pending'))).length > 0 && (
                   <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full animate-pulse ${
                     activeTab === 'pending_users' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'
                   }`}>
-                    {users.filter(u => u.role === 'pending').length}
+                    {users.filter(u => u.role === 'pending' || u.status === 'pending' || (u.roles && u.roles.includes('pending'))).length}
                   </span>
                 )}
               </div>
