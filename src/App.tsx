@@ -322,10 +322,23 @@ export default function App() {
         const mailKey = u.email.toLowerCase().trim();
         const canonicalId = getCanonicalUserId(mailKey);
 
+        // Sanitize non-admin users if they previously had admin role assigned
+        let sanitizedUser = { ...u };
+        if (mailKey !== 'juan.codina@murciaeduca.es' && (sanitizedUser.role === 'admin' || sanitizedUser.roles?.includes('admin'))) {
+          const nonAdminRoles = (sanitizedUser.roles || []).filter(r => r !== 'admin');
+          const primaryRole = nonAdminRoles.includes('profesor') ? 'profesor' : (nonAdminRoles.includes('alumno') ? 'alumno' : 'pending');
+          sanitizedUser.role = primaryRole;
+          sanitizedUser.roles = nonAdminRoles.length > 0 ? nonAdminRoles : [primaryRole];
+          // update Firestore
+          try {
+            await setDoc(doc(db, 'users', canonicalId), sanitizedUser, { merge: true });
+          } catch (e) {}
+        }
+
         if (u.id !== canonicalId) {
           docsToDelete.push(u.id);
           if (!emailMap.has(mailKey)) {
-            const migratedUser = { ...u, id: canonicalId };
+            const migratedUser = { ...sanitizedUser, id: canonicalId };
             emailMap.set(mailKey, migratedUser);
             try {
               await setDoc(doc(db, 'users', canonicalId), migratedUser, { merge: true });
@@ -333,11 +346,11 @@ export default function App() {
           }
         } else {
           if (!emailMap.has(mailKey)) {
-            emailMap.set(mailKey, u);
+            emailMap.set(mailKey, sanitizedUser);
           } else {
             const existing = emailMap.get(mailKey)!;
-            if (existing.role === 'pending' && u.role !== 'pending') {
-              emailMap.set(mailKey, u);
+            if (existing.role === 'pending' && sanitizedUser.role !== 'pending') {
+              emailMap.set(mailKey, sanitizedUser);
             }
           }
         }
@@ -585,7 +598,7 @@ export default function App() {
       }
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
-      const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es' || emailLower === 'juan.codina@murcieduca.es';
+      const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
       
       // Parse URL parameters for direct boarding
       const searchParams = new URLSearchParams(window.location.search);
