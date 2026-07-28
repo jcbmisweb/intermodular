@@ -42,6 +42,7 @@ import ProjectDetailDrawer from './components/ProjectDetailDrawer';
 import MetricsTab from './components/MetricsTab';
 import SettingsTab from './components/SettingsTab';
 import UserManagementTab from './components/UserManagementTab';
+import PendingUsersTab from './components/PendingUsersTab';
 import ClassroomManagementTab from './components/ClassroomManagementTab';
 import RATab from './components/RATab';
 import PendingSpace from './components/PendingSpace';
@@ -1315,6 +1316,30 @@ export default function App() {
 
             <button
               onClick={() => {
+                setActiveTab('pending_users');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                activeTab === 'pending_users'
+                  ? 'bg-amber-500 text-white shadow-xs font-bold'
+                  : 'text-zinc-600 hover:bg-amber-50 hover:text-amber-900'
+              }`}
+            >
+              <Clock className="h-4 w-4 shrink-0" />
+              <div className="flex-1 flex items-center justify-between">
+                <span>Nuevos Usuarios</span>
+                {users.filter(u => u.role === 'pending').length > 0 && (
+                  <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full animate-pulse ${
+                    activeTab === 'pending_users' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'
+                  }`}>
+                    {users.filter(u => u.role === 'pending').length}
+                  </span>
+                )}
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTab('users');
                 setIsMobileMenuOpen(false);
               }}
@@ -1325,14 +1350,7 @@ export default function App() {
               }`}
             >
               <UserCheck className="h-4 w-4" />
-              <div className="flex-1 flex items-center justify-between">
-                <span>Gestión de Usuarios</span>
-                {users.filter(u => u.role === 'pending').length > 0 && (
-                  <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-extrabold rounded-full">
-                    {users.filter(u => u.role === 'pending').length}
-                  </span>
-                )}
-              </div>
+              <span>Gestión de Usuarios</span>
             </button>
 
             <button
@@ -1497,6 +1515,16 @@ export default function App() {
                 projects={projects}
                 users={users}
                 onToggleTask={handleToggleTask}
+              />
+            )}
+
+            {activeTab === 'pending_users' && (
+              <PendingUsersTab
+                users={users}
+                classrooms={classrooms}
+                onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
+                onNavigateToAllUsers={() => setActiveTab('users')}
               />
             )}
 
