@@ -148,8 +148,12 @@ export default function App() {
     ];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
+    const safeUserId = emailLower === 'juan.codina@murciaeduca.es' 
+      ? 'u-admin' 
+      : 'u-' + emailLower.replace(/[^a-z0-9]/g, '_');
+
     const newUser: AppUser = {
-      id: `u-${Date.now()}`,
+      id: safeUserId,
       name: name.trim(),
       email: emailLower,
       role: 'pending',
@@ -165,14 +169,6 @@ export default function App() {
     };
 
     await setDoc(doc(db, 'users', newUser.id), newUser);
-    
-    // Update local users list & local storage cache instantly
-    setUsers(prev => {
-      const filtered = prev.filter(u => u.id !== newUser.id && u.email !== newUser.email);
-      const updatedList = [...filtered, newUser];
-      localStorage.setItem('studio_users_cache_v2', JSON.stringify(updatedList));
-      return updatedList;
-    });
 
     // Auto-login registered user so they enter the platform immediately in pending state
     setLocalUser(newUser);
@@ -290,22 +286,38 @@ export default function App() {
 
     // B. Sync Users
     const unsubUsers = onSnapshot(collection(db, 'users'), async (snapshot) => {
-      const list: AppUser[] = [];
-      snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as AppUser));
+      const rawList: AppUser[] = [];
+      snapshot.forEach(d => rawList.push({ ...d.data(), id: d.id } as AppUser));
       
-      // Retrieve local cache to prevent dropping newly registered pending users
-      const cachedStr = localStorage.getItem('studio_users_cache_v2');
-      let cachedUsers: AppUser[] = [];
-      if (cachedStr) {
-        try { cachedUsers = JSON.parse(cachedStr); } catch (e) {}
-      }
+      // Automatic deduplication by email in Firestore
+      const emailMap = new Map<string, AppUser>();
+      const duplicatesToDelete: string[] = [];
 
-      const map = new Map<string, AppUser>();
-      cachedUsers.forEach(u => map.set(u.id, u));
-      list.forEach(u => map.set(u.id, u)); // Firestore updates take precedence
-      const mergedList = Array.from(map.values());
+      rawList.forEach(u => {
+        if (!u.email) return;
+        const mailKey = u.email.toLowerCase().trim();
+        if (!emailMap.has(mailKey)) {
+          emailMap.set(mailKey, u);
+        } else {
+          const existing = emailMap.get(mailKey)!;
+          // Prefer active role over pending role
+          if (existing.role === 'pending' && u.role !== 'pending') {
+            duplicatesToDelete.push(existing.id);
+            emailMap.set(mailKey, u);
+          } else {
+            duplicatesToDelete.push(u.id);
+          }
+        }
+      });
 
-      const hasAdmin = mergedList.some(u => u.id === 'u-admin' || u.role === 'admin');
+      // Clean up duplicate user documents from Firestore
+      duplicatesToDelete.forEach(async (dupId) => {
+        try { await deleteDoc(doc(db, 'users', dupId)); } catch (e) {}
+      });
+
+      const uniqueList = Array.from(emailMap.values());
+
+      const hasAdmin = uniqueList.some(u => u.id === 'u-admin' || u.role === 'admin' || u.email?.toLowerCase() === 'juan.codina@murciaeduca.es');
       if (!hasAdmin) {
         const defaultAdmin: AppUser = {
           id: 'u-admin',
@@ -319,10 +331,10 @@ export default function App() {
           joinedAt: new Date().toISOString().split('T')[0]
         };
         await setDoc(doc(db, 'users', 'u-admin'), defaultAdmin);
-        mergedList.push(defaultAdmin);
+        uniqueList.push(defaultAdmin);
       }
-      localStorage.setItem('studio_users_cache_v2', JSON.stringify(mergedList));
-      setUsers(mergedList);
+
+      setUsers(uniqueList);
     });
 
     // C. Sync Projects
@@ -671,29 +683,23 @@ export default function App() {
           matched = updatedUser;
         }
         
-        // Ensure user is in local users state & cache
-        const finalMatched = matched;
-        setUsers(prev => {
-          const filtered = prev.filter(u => u.id !== finalMatched.id && u.email !== finalMatched.email);
-          const newList = [...filtered, finalMatched];
-          localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
-          return newList;
-        });
-
-        // Set active current user if not manually simulating another account
         if (!currentUser || currentUser.email === emailLower) {
-          setCurrentUser(finalMatched);
-          setActiveRole(finalMatched.role);
-          localStorage.setItem('studio_current_user_id_v2', finalMatched.id);
+          setCurrentUser(matched);
+          setActiveRole(matched.role);
+          localStorage.setItem('studio_current_user_id_v2', matched.id);
         }
       } else {
-        // User not found, create them as pending (or admin if superadmin)
+        // User not found, create them with a safe deterministic ID
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
         
+        const safeUserId = isSuperAdmin 
+          ? 'u-admin' 
+          : 'u-' + emailLower.replace(/[^a-z0-9]/g, '_');
+
         const newUser: AppUser = {
-          id: `u-${Date.now()}`,
+          id: safeUserId,
           name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Nuevo Usuario',
           email: emailLower,
           role: isSuperAdmin ? 'admin' : 'pending',
@@ -705,13 +711,6 @@ export default function App() {
         };
         
         await setDoc(doc(db, 'users', newUser.id), newUser);
-        
-        setUsers(prev => {
-          const filtered = prev.filter(u => u.id !== newUser.id && u.email !== newUser.email);
-          const newList = [...filtered, newUser];
-          localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
-          return newList;
-        });
 
         if (!currentUser || currentUser.email === emailLower) {
           setCurrentUser(newUser);
@@ -763,11 +762,6 @@ export default function App() {
 
   const handleUpdateUser = async (updatedUser: AppUser) => {
     await setDoc(doc(db, 'users', updatedUser.id), updatedUser);
-    setUsers(prev => {
-      const newList = prev.map(u => u.id === updatedUser.id ? updatedUser : u);
-      localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
-      return newList;
-    });
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
       setActiveRole(updatedUser.role);
@@ -776,41 +770,31 @@ export default function App() {
 
   const handleDeleteUser = async (userId: string) => {
     await deleteDoc(doc(db, 'users', userId));
-    setUsers(prev => {
-      const newList = prev.filter(u => u.id !== userId);
-      localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
-      return newList;
-    });
     if (currentUser?.id === userId) {
       handleSwitchSession('u-admin');
     }
   };
 
   const handleAddUser = async (newUser: AppUser) => {
-    await setDoc(doc(db, 'users', newUser.id), newUser);
-    setUsers(prev => {
-      const newList = [...prev.filter(u => u.id !== newUser.id), newUser];
-      localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
-      return newList;
-    });
+    const safeId = newUser.id || (newUser.email ? 'u-' + newUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : `u-${Date.now()}`);
+    const finalUser = { ...newUser, id: safeId };
+    await setDoc(doc(db, 'users', finalUser.id), finalUser);
   };
 
   const handleRefreshUsers = async () => {
     const snapshot = await getDocs(collection(db, 'users'));
     const list: AppUser[] = [];
-    snapshot.forEach(d => list.push(d.data() as AppUser));
+    snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as AppUser));
     
-    const cachedStr = localStorage.getItem('studio_users_cache_v2');
-    let cachedUsers: AppUser[] = [];
-    if (cachedStr) {
-      try { cachedUsers = JSON.parse(cachedStr); } catch (e) {}
-    }
-    const map = new Map<string, AppUser>();
-    cachedUsers.forEach(u => map.set(u.id, u));
-    list.forEach(u => map.set(u.id, u));
-    const mergedList = Array.from(map.values());
-    localStorage.setItem('studio_users_cache_v2', JSON.stringify(mergedList));
-    setUsers(mergedList);
+    const emailMap = new Map<string, AppUser>();
+    list.forEach(u => {
+      if (!u.email) return;
+      const mailKey = u.email.toLowerCase().trim();
+      if (!emailMap.has(mailKey)) {
+        emailMap.set(mailKey, u);
+      }
+    });
+    setUsers(Array.from(emailMap.values()));
   };
 
   const handleCreateClassroom = async (name: string) => {
