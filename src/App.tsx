@@ -389,24 +389,28 @@ export default function App() {
 
     // H. Sync Registration Codes
     const unsubRegistrationCodes = onSnapshot(collection(db, 'registration_codes'), (snapshot) => {
-      if (snapshot.empty) {
-        // Seed default codes so the system works out-of-the-box and maintains compatibility
-        const defaultCodes = [
-          { id: 'JCB-2HCA', role: 'alumno', classroom: '2HCA', createdAt: new Date().toISOString() },
-          { id: 'PROF-JCB-2HCA', role: 'profesor', classroom: '2HCA', createdAt: new Date().toISOString() },
-          { id: 'JCB-2HCB', role: 'alumno', classroom: '2HCB', createdAt: new Date().toISOString() },
-          { id: 'PROF-JCB-2HCB', role: 'profesor', classroom: '2HCB', createdAt: new Date().toISOString() },
-          { id: 'JCB-2HCC', role: 'alumno', classroom: '2HCC', createdAt: new Date().toISOString() },
-          { id: 'PROF-JCB-2HCC', role: 'profesor', classroom: '2HCC', createdAt: new Date().toISOString() },
-        ];
-        defaultCodes.forEach(async (code) => {
+      const defaultCodes = [
+        { id: 'JCB-2HCA', role: 'alumno', classroom: '2HCA', createdAt: new Date().toISOString() },
+        { id: 'PROF-JCB-2HCA', role: 'profesor', classroom: '2HCA', createdAt: new Date().toISOString() },
+        { id: 'JCB-2HCB', role: 'alumno', classroom: '2HCB', createdAt: new Date().toISOString() },
+        { id: 'PROF-JCB-2HCB', role: 'profesor', classroom: '2HCB', createdAt: new Date().toISOString() },
+        { id: 'JCB-2HCC', role: 'alumno', classroom: '2HCC', createdAt: new Date().toISOString() },
+        { id: 'PROF-JCB-2HCC', role: 'profesor', classroom: '2HCC', createdAt: new Date().toISOString() },
+      ];
+
+      const existingIds = new Set<string>();
+      snapshot.forEach(d => existingIds.add(d.id));
+
+      defaultCodes.forEach(async (code) => {
+        if (!existingIds.has(code.id)) {
           await setDoc(doc(db, 'registration_codes', code.id), {
             role: code.role,
             classroom: code.classroom,
             createdAt: code.createdAt
           });
-        });
-      }
+        }
+      });
+
       const list: RegistrationCode[] = [];
       snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as any));
       setRegistrationCodes(list);
