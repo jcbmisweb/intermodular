@@ -164,6 +164,22 @@ export default function App() {
     };
 
     await setDoc(doc(db, 'users', newUser.id), newUser);
+    
+    // Update local users list & local storage cache instantly
+    setUsers(prev => {
+      const filtered = prev.filter(u => u.id !== newUser.id && u.email !== newUser.email);
+      const updatedList = [...filtered, newUser];
+      localStorage.setItem('studio_users_cache_v2', JSON.stringify(updatedList));
+      return updatedList;
+    });
+
+    // Auto-login registered user so they enter the platform immediately in pending state
+    setLocalUser(newUser);
+    setCurrentUser(newUser);
+    setActiveRole(newUser.role);
+    localStorage.setItem('studio_local_user_id', newUser.id);
+    localStorage.setItem('studio_current_user_id_v2', newUser.id);
+
     return { success: true };
   };
 
@@ -267,7 +283,19 @@ export default function App() {
       const list: AppUser[] = [];
       snapshot.forEach(d => list.push({ ...d.data(), id: d.id } as AppUser));
       
-      const hasAdmin = list.some(u => u.id === 'u-admin' || u.role === 'admin');
+      // Retrieve local cache to prevent dropping newly registered pending users
+      const cachedStr = localStorage.getItem('studio_users_cache_v2');
+      let cachedUsers: AppUser[] = [];
+      if (cachedStr) {
+        try { cachedUsers = JSON.parse(cachedStr); } catch (e) {}
+      }
+
+      const map = new Map<string, AppUser>();
+      cachedUsers.forEach(u => map.set(u.id, u));
+      list.forEach(u => map.set(u.id, u)); // Firestore updates take precedence
+      const mergedList = Array.from(map.values());
+
+      const hasAdmin = mergedList.some(u => u.id === 'u-admin' || u.role === 'admin');
       if (!hasAdmin) {
         const defaultAdmin: AppUser = {
           id: 'u-admin',
@@ -281,9 +309,10 @@ export default function App() {
           joinedAt: new Date().toISOString().split('T')[0]
         };
         await setDoc(doc(db, 'users', 'u-admin'), defaultAdmin);
-        list.push(defaultAdmin);
+        mergedList.push(defaultAdmin);
       }
-      setUsers(list);
+      localStorage.setItem('studio_users_cache_v2', JSON.stringify(mergedList));
+      setUsers(mergedList);
     });
 
     // C. Sync Projects
@@ -704,13 +733,24 @@ export default function App() {
 
   const handleUpdateUser = async (updatedUser: AppUser) => {
     await setDoc(doc(db, 'users', updatedUser.id), updatedUser);
+    setUsers(prev => {
+      const newList = prev.map(u => u.id === updatedUser.id ? updatedUser : u);
+      localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
+      return newList;
+    });
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
+      setActiveRole(updatedUser.role);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
     await deleteDoc(doc(db, 'users', userId));
+    setUsers(prev => {
+      const newList = prev.filter(u => u.id !== userId);
+      localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
+      return newList;
+    });
     if (currentUser?.id === userId) {
       handleSwitchSession('u-admin');
     }
@@ -718,13 +758,29 @@ export default function App() {
 
   const handleAddUser = async (newUser: AppUser) => {
     await setDoc(doc(db, 'users', newUser.id), newUser);
+    setUsers(prev => {
+      const newList = [...prev.filter(u => u.id !== newUser.id), newUser];
+      localStorage.setItem('studio_users_cache_v2', JSON.stringify(newList));
+      return newList;
+    });
   };
 
   const handleRefreshUsers = async () => {
     const snapshot = await getDocs(collection(db, 'users'));
     const list: AppUser[] = [];
     snapshot.forEach(d => list.push(d.data() as AppUser));
-    setUsers(list);
+    
+    const cachedStr = localStorage.getItem('studio_users_cache_v2');
+    let cachedUsers: AppUser[] = [];
+    if (cachedStr) {
+      try { cachedUsers = JSON.parse(cachedStr); } catch (e) {}
+    }
+    const map = new Map<string, AppUser>();
+    cachedUsers.forEach(u => map.set(u.id, u));
+    list.forEach(u => map.set(u.id, u));
+    const mergedList = Array.from(map.values());
+    localStorage.setItem('studio_users_cache_v2', JSON.stringify(mergedList));
+    setUsers(mergedList);
   };
 
   const handleCreateClassroom = async (name: string) => {
