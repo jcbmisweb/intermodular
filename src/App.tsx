@@ -59,6 +59,21 @@ export const getCanonicalUserId = (email: string): string => {
   return 'u-' + emailLower.replace(/[^a-z0-9]/g, '_');
 };
 
+export const purgeAllNonAdminUsers = async () => {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    for (const d of snap.docs) {
+      const data = d.data();
+      const email = (data.email || '').toLowerCase().trim();
+      if (email !== 'juan.codina@murciaeduca.es' && d.id !== 'u-admin') {
+        await deleteDoc(doc(db, 'users', d.id));
+      }
+    }
+  } catch (err) {
+    console.error("Error purging non-admin users:", err);
+  }
+};
+
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [localUser, setLocalUser] = useState<AppUser | null>(null);
@@ -240,6 +255,18 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [activeRole, setActiveRole] = useState<UserRole | null>(null);
 
+  // One-time purge of non-admin users as requested
+  useEffect(() => {
+    const purgeOnce = async () => {
+      const purged = localStorage.getItem('studio_users_purged_v2');
+      if (!purged) {
+        await purgeAllNonAdminUsers();
+        localStorage.setItem('studio_users_purged_v2', 'true');
+      }
+    };
+    purgeOnce();
+  }, []);
+
   // Sync/Load localUser from cache on start & keep currentUser fresh with real-time updates
   useEffect(() => {
     if (users.length > 0) {
@@ -258,22 +285,26 @@ export default function App() {
               setActiveRole(fresh.role);
             }
           }
+        } else {
+          // Current user was deleted
+          setCurrentUser(null);
+          setLocalUser(null);
+          setActiveRole(null);
+          localStorage.removeItem('studio_current_user_id_v2');
+          localStorage.removeItem('studio_local_user_id');
         }
       } else {
         const savedUserId = localStorage.getItem('studio_current_user_id_v2') || localStorage.getItem('studio_local_user_id');
         if (savedUserId) {
-          const matched = users.find(u => u.id === savedUserId);
+          const matched = users.find(u => u.id === savedUserId || (u.email && u.email.toLowerCase() === savedUserId.toLowerCase()));
           if (matched) {
             setLocalUser(matched);
             setCurrentUser(matched);
             setActiveRole(matched.role);
-          }
-        }
-        if (!currentUser) {
-          const adminUser = users.find(u => u.id === 'u-admin' || u.role === 'admin' || u.email?.toLowerCase() === 'juan.codina@murciaeduca.es') || users[0];
-          if (adminUser) {
-            setCurrentUser(adminUser);
-            setActiveRole(adminUser.role);
+          } else {
+            // Saved user no longer exists (e.g. database reset)
+            localStorage.removeItem('studio_current_user_id_v2');
+            localStorage.removeItem('studio_local_user_id');
           }
         }
       }
@@ -322,55 +353,47 @@ export default function App() {
         const mailKey = u.email.toLowerCase().trim();
         const canonicalId = getCanonicalUserId(mailKey);
 
-        // Sanitize non-admin users if they previously had admin role assigned
-        let sanitizedUser = { ...u };
-        if (mailKey !== 'juan.codina@murciaeduca.es' && (sanitizedUser.role === 'admin' || sanitizedUser.roles?.includes('admin'))) {
-          const nonAdminRoles = (sanitizedUser.roles || []).filter(r => r !== 'admin');
-          const primaryRole = nonAdminRoles.includes('profesor') ? 'profesor' : (nonAdminRoles.includes('alumno') ? 'alumno' : 'pending');
-          sanitizedUser.role = primaryRole;
-          sanitizedUser.roles = nonAdminRoles.length > 0 ? nonAdminRoles : [primaryRole];
-          // update Firestore
-          try {
-            await setDoc(doc(db, 'users', canonicalId), sanitizedUser, { merge: true });
-          } catch (e) {}
+        let sanitizedUser: AppUser = { ...u, id: canonicalId };
+
+        // Enforce SuperAdmin Constraint: Only juan.codina@murciaeduca.es can be admin
+        if (mailKey === 'juan.codina@murciaeduca.es') {
+          sanitizedUser.id = 'u-admin';
+          sanitizedUser.role = 'admin';
+          sanitizedUser.roles = ['admin', 'profesor', 'alumno'];
+        } else {
+          // Non-admin sanitization: Strip admin role
+          if (sanitizedUser.role === 'admin' || (sanitizedUser.roles && sanitizedUser.roles.includes('admin'))) {
+            const nonAdminRoles = (sanitizedUser.roles || []).filter(r => r !== 'admin');
+            const primaryRole = nonAdminRoles.includes('profesor') ? 'profesor' : (nonAdminRoles.includes('alumno') ? 'alumno' : 'pending');
+            sanitizedUser.role = primaryRole as UserRole;
+            sanitizedUser.roles = nonAdminRoles.length > 0 ? (nonAdminRoles as UserRole[]) : [primaryRole as UserRole];
+          }
         }
 
+        // Track legacy doc IDs for deletion
         if (u.id !== canonicalId) {
           docsToDelete.push(u.id);
-          if (!emailMap.has(mailKey)) {
-            const migratedUser = { ...sanitizedUser, id: canonicalId };
-            emailMap.set(mailKey, migratedUser);
-            try {
-              await setDoc(doc(db, 'users', canonicalId), migratedUser, { merge: true });
-            } catch (e) {}
-          }
+        }
+
+        // Deduplicate in memory by email
+        if (!emailMap.has(mailKey)) {
+          emailMap.set(mailKey, sanitizedUser);
         } else {
-          if (!emailMap.has(mailKey)) {
+          const existing = emailMap.get(mailKey)!;
+          // Prefer active roles over pending roles
+          if (existing.role === 'pending' && sanitizedUser.role !== 'pending') {
             emailMap.set(mailKey, sanitizedUser);
-          } else {
-            const existing = emailMap.get(mailKey)!;
-            if (existing.role === 'pending' && sanitizedUser.role !== 'pending') {
-              emailMap.set(mailKey, sanitizedUser);
-            }
           }
         }
       }
 
-      // Clean up legacy non-canonical user documents
-      for (const oldId of docsToDelete) {
-        try {
-          await deleteDoc(doc(db, 'users', oldId));
-        } catch (e) {}
-      }
-
-      const cleanList = Array.from(emailMap.values());
-
-      const hasAdmin = cleanList.some(u => u.id === 'u-admin' || u.role === 'admin' || u.email?.toLowerCase() === 'juan.codina@murciaeduca.es');
-      if (!hasAdmin) {
+      // Ensure default super admin exists
+      if (!emailMap.has('juan.codina@murciaeduca.es')) {
         const defaultAdmin: AppUser = {
           id: 'u-admin',
           name: 'Juan Carlos (Admin)',
           email: 'juan.codina@murciaeduca.es',
+          password: 'admin',
           role: 'admin',
           roles: ['admin', 'profesor', 'alumno'],
           avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Admin',
@@ -378,10 +401,22 @@ export default function App() {
           color: 'bg-emerald-600 text-white',
           joinedAt: new Date().toISOString().split('T')[0]
         };
-        await setDoc(doc(db, 'users', 'u-admin'), defaultAdmin);
-        cleanList.push(defaultAdmin);
+        emailMap.set('juan.codina@murciaeduca.es', defaultAdmin);
+        try {
+          await setDoc(doc(db, 'users', 'u-admin'), defaultAdmin);
+        } catch (e) {}
       }
 
+      // Cleanup legacy non-canonical user documents
+      for (const oldId of docsToDelete) {
+        if (oldId !== 'u-admin') {
+          try {
+            await deleteDoc(doc(db, 'users', oldId));
+          } catch (e) {}
+        }
+      }
+
+      const cleanList = Array.from(emailMap.values());
       setUsers(cleanList);
     });
 
@@ -589,13 +624,7 @@ export default function App() {
   // Synchronize Google authenticated firebaseUser with live application users
   useEffect(() => {
     const syncUser = async () => {
-      // If user logged out, clear local storage and current user
-      if (!firebaseUser) {
-        localStorage.removeItem('studio_current_user_id_v2');
-        setCurrentUser(null);
-        setActiveRole('alumno');
-        return;
-      }
+      if (!firebaseUser) return;
       
       const emailLower = (firebaseUser.email || '').toLowerCase();
       const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
@@ -813,24 +842,60 @@ export default function App() {
   };
 
   const handleUpdateUser = async (updatedUser: AppUser) => {
-    await setDoc(doc(db, 'users', updatedUser.id), updatedUser);
-    if (currentUser && currentUser.id === updatedUser.id) {
-      setCurrentUser(updatedUser);
-      setActiveRole(updatedUser.role);
+    if (!updatedUser.email) return;
+    const emailLower = updatedUser.email.toLowerCase().trim();
+    const canonicalId = getCanonicalUserId(emailLower);
+
+    const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
+    const role = isSuperAdmin ? 'admin' : (updatedUser.role === 'admin' ? 'profesor' : updatedUser.role);
+    const roles = isSuperAdmin ? ['admin', 'profesor', 'alumno'] : (updatedUser.roles || [role]).filter(r => r !== 'admin');
+
+    const finalUser: AppUser = {
+      ...updatedUser,
+      id: canonicalId,
+      email: emailLower,
+      role: role as UserRole,
+      roles: roles.length > 0 ? (roles as UserRole[]) : ['pending']
+    };
+
+    await setDoc(doc(db, 'users', canonicalId), finalUser, { merge: true });
+
+    if (currentUser && (currentUser.id === canonicalId || currentUser.email?.toLowerCase() === emailLower)) {
+      setCurrentUser(finalUser);
+      setActiveRole(finalUser.role);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
+    const userToDelete = users.find(u => u.id === userId);
+    if (userToDelete?.email?.toLowerCase() === 'juan.codina@murciaeduca.es') {
+      alert('No se puede eliminar la cuenta del administrador principal.');
+      return;
+    }
     await deleteDoc(doc(db, 'users', userId));
     if (currentUser?.id === userId) {
-      handleSwitchSession('u-admin');
+      handleLogout();
     }
   };
 
   const handleAddUser = async (newUser: AppUser) => {
-    const safeId = newUser.id || (newUser.email ? 'u-' + newUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : `u-${Date.now()}`);
-    const finalUser = { ...newUser, id: safeId };
-    await setDoc(doc(db, 'users', finalUser.id), finalUser);
+    if (!newUser.email) return;
+    const emailLower = newUser.email.toLowerCase().trim();
+    const canonicalId = getCanonicalUserId(emailLower);
+
+    const isSuperAdmin = emailLower === 'juan.codina@murciaeduca.es';
+    const role = isSuperAdmin ? 'admin' : (newUser.role === 'admin' ? 'profesor' : newUser.role);
+    const roles = isSuperAdmin ? ['admin', 'profesor', 'alumno'] : (newUser.roles || [role]).filter(r => r !== 'admin');
+
+    const finalUser: AppUser = {
+      ...newUser,
+      id: canonicalId,
+      email: emailLower,
+      role: role as UserRole,
+      roles: roles.length > 0 ? (roles as UserRole[]) : ['pending']
+    };
+
+    await setDoc(doc(db, 'users', canonicalId), finalUser);
   };
 
   const handleRefreshUsers = async () => {
@@ -842,8 +907,21 @@ export default function App() {
     list.forEach(u => {
       if (!u.email) return;
       const mailKey = u.email.toLowerCase().trim();
+      const canonicalId = getCanonicalUserId(mailKey);
+      let sanitizedUser: AppUser = { ...u, id: canonicalId };
+      if (mailKey === 'juan.codina@murciaeduca.es') {
+        sanitizedUser.role = 'admin';
+        sanitizedUser.roles = ['admin', 'profesor', 'alumno'];
+      } else {
+        if (sanitizedUser.role === 'admin' || sanitizedUser.roles?.includes('admin')) {
+          const nonAdminRoles = (sanitizedUser.roles || []).filter(r => r !== 'admin');
+          const primaryRole = nonAdminRoles.includes('profesor') ? 'profesor' : (nonAdminRoles.includes('alumno') ? 'alumno' : 'pending');
+          sanitizedUser.role = primaryRole as UserRole;
+          sanitizedUser.roles = nonAdminRoles.length > 0 ? (nonAdminRoles as UserRole[]) : [primaryRole as UserRole];
+        }
+      }
       if (!emailMap.has(mailKey)) {
-        emailMap.set(mailKey, u);
+        emailMap.set(mailKey, sanitizedUser);
       }
     });
     setUsers(Array.from(emailMap.values()));

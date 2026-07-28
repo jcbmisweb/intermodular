@@ -22,6 +22,7 @@ import {
   Link
 } from 'lucide-react';
 import { AppUser, UserRole, RegistrationCode } from '../types';
+import { getCanonicalUserId, purgeAllNonAdminUsers } from '../App';
 
 interface UserManagementTabProps {
   users: AppUser[];
@@ -132,10 +133,11 @@ export default function UserManagementTab({
         ? ['profesor'] as UserRole[]
         : [newRole] as UserRole[];
 
+    const canonicalId = getCanonicalUserId(newEmail);
     const newUser: AppUser = {
-      id: `u-${Date.now()}`,
+      id: canonicalId,
       name: newName,
-      email: newEmail,
+      email: newEmail.trim().toLowerCase(),
       role: newRole,
       roles: rolesList,
       avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(newName)}`,
@@ -377,13 +379,25 @@ export default function UserManagementTab({
         </div>
 
         {/* Add simulation user button */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={onRefreshUsers}
-            className="flex items-center justify-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0"
+            className="flex items-center justify-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0"
           >
             <RefreshCw className="h-4 w-4" />
             <span>Recargar Usuarios</span>
+          </button>
+          <button
+            onClick={async () => {
+              if (confirm('¿Estás seguro de que deseas eliminar todas las cuentas de usuario registradas y dejar únicamente la cuenta de Administrador? Esta acción partirá desde cero.')) {
+                await purgeAllNonAdminUsers();
+                onRefreshUsers();
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-all shrink-0"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Vaciar Cuentas (Solo Admin)</span>
           </button>
           <button
             onClick={() => setIsAddingUser(!isAddingUser)}
