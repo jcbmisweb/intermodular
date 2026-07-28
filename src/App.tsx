@@ -50,6 +50,15 @@ import ProfesorDashboard from './components/ProfesorDashboard';
 import AlumnoDashboard from './components/AlumnoDashboard';
 import LoginPage from './components/LoginPage';
 
+export const getCanonicalUserId = (email: string): string => {
+  if (!email) return `u-${Date.now()}`;
+  const emailLower = email.toLowerCase().trim();
+  if (emailLower === 'juan.codina@murciaeduca.es') {
+    return 'u-admin';
+  }
+  return 'u-' + emailLower.replace(/[^a-z0-9]/g, '_');
+};
+
 export default function App() {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [localUser, setLocalUser] = useState<AppUser | null>(null);
@@ -231,25 +240,41 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [activeRole, setActiveRole] = useState<UserRole | null>(null);
 
-  // Sync/Load localUser from cache on start or when currentUser is not set
+  // Sync/Load localUser from cache on start & keep currentUser fresh with real-time updates
   useEffect(() => {
     if (users.length > 0) {
-      const savedUserId = localStorage.getItem('studio_current_user_id_v2') || localStorage.getItem('studio_local_user_id');
-      if (savedUserId) {
-        const matched = users.find(u => u.id === savedUserId);
-        if (matched) {
-          setLocalUser(matched);
-          if (!currentUser) {
+      if (currentUser) {
+        const fresh = users.find(u => u.id === currentUser.id || (u.email && u.email.toLowerCase() === currentUser.email?.toLowerCase()));
+        if (fresh) {
+          if (
+            fresh.id !== currentUser.id || 
+            fresh.role !== currentUser.role || 
+            fresh.status !== currentUser.status || 
+            fresh.classroom !== currentUser.classroom || 
+            fresh.name !== currentUser.name
+          ) {
+            setCurrentUser(fresh);
+            if (currentUser.role === 'pending' && fresh.role !== 'pending') {
+              setActiveRole(fresh.role);
+            }
+          }
+        }
+      } else {
+        const savedUserId = localStorage.getItem('studio_current_user_id_v2') || localStorage.getItem('studio_local_user_id');
+        if (savedUserId) {
+          const matched = users.find(u => u.id === savedUserId);
+          if (matched) {
+            setLocalUser(matched);
             setCurrentUser(matched);
             setActiveRole(matched.role);
           }
         }
-      }
-      if (!currentUser) {
-        const adminUser = users.find(u => u.id === 'u-admin' || u.role === 'admin') || users[0];
-        if (adminUser) {
-          setCurrentUser(adminUser);
-          setActiveRole(adminUser.role);
+        if (!currentUser) {
+          const adminUser = users.find(u => u.id === 'u-admin' || u.role === 'admin' || u.email?.toLowerCase() === 'juan.codina@murciaeduca.es') || users[0];
+          if (adminUser) {
+            setCurrentUser(adminUser);
+            setActiveRole(adminUser.role);
+          }
         }
       }
     }
@@ -289,35 +314,45 @@ export default function App() {
       const rawList: AppUser[] = [];
       snapshot.forEach(d => rawList.push({ ...d.data(), id: d.id } as AppUser));
       
-      // Automatic deduplication by email in Firestore
       const emailMap = new Map<string, AppUser>();
-      const duplicatesToDelete: string[] = [];
+      const docsToDelete: string[] = [];
 
-      rawList.forEach(u => {
-        if (!u.email) return;
+      for (const u of rawList) {
+        if (!u.email) continue;
         const mailKey = u.email.toLowerCase().trim();
-        if (!emailMap.has(mailKey)) {
-          emailMap.set(mailKey, u);
+        const canonicalId = getCanonicalUserId(mailKey);
+
+        if (u.id !== canonicalId) {
+          docsToDelete.push(u.id);
+          if (!emailMap.has(mailKey)) {
+            const migratedUser = { ...u, id: canonicalId };
+            emailMap.set(mailKey, migratedUser);
+            try {
+              await setDoc(doc(db, 'users', canonicalId), migratedUser, { merge: true });
+            } catch (e) {}
+          }
         } else {
-          const existing = emailMap.get(mailKey)!;
-          // Prefer active role over pending role
-          if (existing.role === 'pending' && u.role !== 'pending') {
-            duplicatesToDelete.push(existing.id);
+          if (!emailMap.has(mailKey)) {
             emailMap.set(mailKey, u);
           } else {
-            duplicatesToDelete.push(u.id);
+            const existing = emailMap.get(mailKey)!;
+            if (existing.role === 'pending' && u.role !== 'pending') {
+              emailMap.set(mailKey, u);
+            }
           }
         }
-      });
+      }
 
-      // Clean up duplicate user documents from Firestore
-      duplicatesToDelete.forEach(async (dupId) => {
-        try { await deleteDoc(doc(db, 'users', dupId)); } catch (e) {}
-      });
+      // Clean up legacy non-canonical user documents
+      for (const oldId of docsToDelete) {
+        try {
+          await deleteDoc(doc(db, 'users', oldId));
+        } catch (e) {}
+      }
 
-      const uniqueList = Array.from(emailMap.values());
+      const cleanList = Array.from(emailMap.values());
 
-      const hasAdmin = uniqueList.some(u => u.id === 'u-admin' || u.role === 'admin' || u.email?.toLowerCase() === 'juan.codina@murciaeduca.es');
+      const hasAdmin = cleanList.some(u => u.id === 'u-admin' || u.role === 'admin' || u.email?.toLowerCase() === 'juan.codina@murciaeduca.es');
       if (!hasAdmin) {
         const defaultAdmin: AppUser = {
           id: 'u-admin',
@@ -331,10 +366,10 @@ export default function App() {
           joinedAt: new Date().toISOString().split('T')[0]
         };
         await setDoc(doc(db, 'users', 'u-admin'), defaultAdmin);
-        uniqueList.push(defaultAdmin);
+        cleanList.push(defaultAdmin);
       }
 
-      setUsers(uniqueList);
+      setUsers(cleanList);
     });
 
     // C. Sync Projects
@@ -620,17 +655,19 @@ export default function App() {
             const existingQ = query(collection(db, 'users'), where('email', '==', emailLower));
             const existingSnap = await getDocs(existingQ);
             let userToSave: AppUser;
+            const canonicalId = getCanonicalUserId(emailLower);
             if (!existingSnap.empty) {
               const prevUser = existingSnap.docs[0].data() as AppUser;
               userToSave = {
                 ...prevUser,
+                id: canonicalId,
                 role: 'alumno',
                 roles: Array.from(new Set([...(prevUser.roles || []), 'alumno'])),
                 classroom: matchedClass
               };
             } else {
               userToSave = {
-                id: `u-${Date.now()}`,
+                id: canonicalId,
                 name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Estudiante',
                 email: emailLower,
                 role: 'alumno',
@@ -643,7 +680,7 @@ export default function App() {
               };
             }
 
-            await setDoc(doc(db, 'users', userToSave.id), userToSave);
+            await setDoc(doc(db, 'users', userToSave.id), userToSave, { merge: true });
             
             // Clear URL params
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -658,45 +695,47 @@ export default function App() {
         }
       }
 
+      // Safe canonical ID for user
+      const safeUserId = getCanonicalUserId(emailLower);
+
       // Try finding user in current state (populated by onSnapshot)
-      let matched = users.find(u => u.email.toLowerCase() === emailLower);
+      let matched = users.find(u => u.id === safeUserId || u.email.toLowerCase() === emailLower);
       
       // If not in state, check Firestore directly
       if (!matched) {
-        const q = query(collection(db, 'users'), where('email', '==', emailLower));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          matched = querySnapshot.docs[0].data() as AppUser;
+        const userDoc = await getDoc(doc(db, 'users', safeUserId));
+        if (userDoc.exists()) {
+          matched = userDoc.data() as AppUser;
+        } else {
+          const q = query(collection(db, 'users'), where('email', '==', emailLower));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            matched = querySnapshot.docs[0].data() as AppUser;
+          }
         }
       }
       
       if (matched) {
+        let updatedUser = { ...matched, id: safeUserId };
         // If matched user exists but does not have super admin roles when they are a superadmin, upgrade them
-        if (isSuperAdmin && (!matched.roles.includes('admin') || matched.role !== 'admin')) {
-          const updatedUser = {
-            ...matched,
-            role: 'admin',
-            roles: Array.from(new Set([...(matched.roles || []), 'admin', 'profesor', 'alumno'])),
-            color: 'bg-emerald-600 text-white'
-          };
-          await setDoc(doc(db, 'users', matched.id), updatedUser);
-          matched = updatedUser;
+        if (isSuperAdmin) {
+          updatedUser.role = 'admin';
+          updatedUser.roles = Array.from(new Set([...(matched.roles || []), 'admin', 'profesor', 'alumno']));
+          updatedUser.color = 'bg-emerald-600 text-white';
         }
         
-        if (!currentUser || currentUser.email === emailLower) {
-          setCurrentUser(matched);
-          setActiveRole(matched.role);
-          localStorage.setItem('studio_current_user_id_v2', matched.id);
+        await setDoc(doc(db, 'users', safeUserId), updatedUser, { merge: true });
+        
+        if (!currentUser || currentUser.email.toLowerCase() === emailLower) {
+          setCurrentUser(updatedUser);
+          setActiveRole(updatedUser.role);
+          localStorage.setItem('studio_current_user_id_v2', updatedUser.id);
         }
       } else {
-        // User not found, create them with a safe deterministic ID
+        // User not found, create them with safe canonical ID
         const initials = firebaseUser.displayName 
           ? firebaseUser.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
           : emailLower.slice(0, 2).toUpperCase();
-        
-        const safeUserId = isSuperAdmin 
-          ? 'u-admin' 
-          : 'u-' + emailLower.replace(/[^a-z0-9]/g, '_');
 
         const newUser: AppUser = {
           id: safeUserId,
@@ -712,7 +751,7 @@ export default function App() {
         
         await setDoc(doc(db, 'users', newUser.id), newUser);
 
-        if (!currentUser || currentUser.email === emailLower) {
+        if (!currentUser || currentUser.email.toLowerCase() === emailLower) {
           setCurrentUser(newUser);
           setActiveRole(newUser.role);
           localStorage.setItem('studio_current_user_id_v2', newUser.id);
